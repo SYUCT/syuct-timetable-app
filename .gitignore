@@ -1,0 +1,9 @@
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+.DS_Store
+artifacts/
+node_modules/
+test-results/

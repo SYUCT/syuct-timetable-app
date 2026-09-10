@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>化大课表</title><link rel="stylesheet" href="app.css"></head><body>
+<header class="brand"><span class="mark">化</span><b>化大课表</b><span class="local">仅存本机</span></header>
+<main>
+<section id="home" class="screen">
+  <div class="hero"><p class="eyebrow">MY TIMETABLE</p><h1 id="semesterTitle">我的课表</h1><p id="weekHint"></p><div class="week-control"><button id="prevWeek" aria-label="上一周">‹</button><label><span class="sr-only">选择教学周</span><select id="weekSelect"></select></label><button id="nextWeek" aria-label="下一周">›</button><button id="thisWeek">本周</button></div></div>
+  <div class="section-title"><h2>课程安排</h2><button class="text-button" id="toggleAll">全周</button></div>
+  <div id="days" class="days"></div><div id="courseList"></div>
+  <div class="empty" id="empty"><span class="empty-icon">▦</span><h2>从你的第一张课表开始</h2><p>登录教务读取，或导入已有课表码。</p><button class="primary" data-page="import">导入课表</button></div>
+</section>
+<section id="import" class="screen" hidden>
+  <p class="eyebrow blue">IMPORT</p><h1>导入课表</h1><p class="muted">教务读取 → 核对修改 → 保存本机</p>
+  <button class="import-choice" data-school="undergraduate"><span class="choice-icon">本</span><span><strong>本科教务</strong><small>信息查询 · 学生个人课表</small></span><span>›</span></button>
+  <button class="import-choice" data-school="graduate"><span class="choice-icon teal">硕</span><span><strong>硕士教务</strong><small>我的课程表 · 选择学期</small></span><span>›</span></button>
+  <p class="notice">测试版：首次读取后请逐门核对。只在校方页面登录，不要读取教务首页的课表摘要。</p>
+  <details class="panel"><summary>已有课表码 / 本科课表文字</summary><label>粘贴内容<textarea id="importText" rows="6" placeholder="SYUCT-TT2:… 或完整的学生个人课表文字"></textarea></label><button id="parseText" class="primary">识别并核对</button></details>
+</section>
+<section id="review" class="screen" hidden>
+  <p class="eyebrow blue">REVIEW</p><h1>核对课表</h1><p id="reviewCount" class="muted"></p><div id="notices" class="notice"></div>
+  <details id="supplemental" class="panel" hidden><summary>未排课及其他提示（不加入课表）</summary><pre id="supplementalText"></pre></details>
+  <div id="editList"></div><button id="addCourse" class="secondary full">＋ 添加安排</button>
+  <div class="panel"><h2>学期信息</h2><p class="muted">名称、日期可留空；总周数默认 20。</p><div id="reviewSettings"></div>
+  <label class="check"><input type="checkbox" id="reviewed">我已核对课程、单双周、教室及学期总周数</label>
+  <button id="saveDraft" class="primary full" disabled>确认并保存</button><button id="cancelDraft" class="text-button full">取消导入</button></div>
+</section>
+<section id="settings" class="screen" hidden>
+  <p class="eyebrow blue">SETTINGS</p><h1>课表设置</h1><div class="panel"><div id="mainSettings"></div><button id="saveSettings" class="primary full">保存设置</button></div>
+  <div class="panel actions"><button id="editSaved">编辑全部课程 <span>›</span></button><button id="exportCode">复制 SYUCT-TT2 课表码 <span>›</span></button><button id="restore">恢复上一次保存 <span>›</span></button><button id="clearLogin">清除教务登录状态 <span>›</span></button></div>
+  <div class="about"><h2>化大课表 <span>0.1.0 α</span></h2><p>学生共建的非官方工具。课表保存在本机；没有后台同步或账号上传。教务登录会保留在 App 内，可随时清除。</p><p>卸载或清除应用数据会删除课表，请先复制课表码备份。</p></div>
+</section>
+</main>
+<div id="message" role="status" hidden></div>
+<nav><button data-page="home" class="active"><span>▦</span>课表</button><button data-page="import"><span>＋</span>导入</button><button data-page="settings"><span>⚙</span>设置</button></nav>
+<script src="timetable-codec.js"></script><script src="timetable-mobile-text-parser.js"></script><script src="timetable-campus-parser.js"></script><script src="app-core.js"></script><script src="app.js"></script>
+</body></html>
