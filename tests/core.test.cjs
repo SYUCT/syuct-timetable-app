@@ -18,7 +18,7 @@ test('本科读取对象复用原解析器并保留诊断',()=>{
  const r=C.parseCapture({kind:'undergraduate',tables:[{text:fixture}],supplemental:['未排课：测试课程'],unreadableFrames:0});
  assert.equal(r.courses.length,20);assert.ok(r.notices.length);assert.ok(r.supplemental.length);
 });
-test('拒绝首页摘要，不将星期分组内容冒充个人完整课表',()=>assert.throws(()=>C.parseCapture({kind:'undergraduate',tables:[{text:'课表\n星期一\n1-2节 (1-13|单周)有机化学AI通明楼138\n星期六星期日'}]})));
+test('未带星期网格的首页文本仍拒绝，不猜测星期',()=>assert.throws(()=>C.parseCapture({kind:'undergraduate',tables:[{text:'课表\n星期一\n1-2节 (1-13|单周)有机化学AI通明楼138\n星期六星期日'}]})));
 test('硕士保留楼号和教室号',()=>assert.deepEqual(C.graduate(grad()).courses[0],course));
 test('离散周次和节次不得补齐',()=>{
  const r=C.graduate(grad('1,3','2-4,8-9'));assert.equal(r.courses.length,4);
@@ -29,7 +29,51 @@ test('硕士单双周与备注',()=>{
  assert.ok(C.graduate(grad('1,2','2-9(教师甲)')).notices.length);
 });
 test('拒绝无法解析周次，不默默导入部分课程',()=>assert.throws(()=>C.graduate(grad('1,2','2-9(补第12周)'))));
-test('拒绝多个课程合并的单元格',()=>{const t=grad();t.grid[1][2]+='\n课程二\n教师乙\n节次:3,4节\n周次:1-4';assert.throws(()=>C.graduate(t));});
+test('同格两课分别保留教师、周次、教室',()=>{
+ const t=grad('7,8','4-8');t.grid[1][2]+='\n\n工程热化学概论\n1班(一班多师)\n节次:7,8节\n周次:10-17(教师乙)\n地点:瑞师楼226\n开课院系:测试学院\n电话:';
+ const r=C.graduate(t);assert.equal(r.courses.length,2);
+ assert.deepEqual(r.courses.map(c=>[c.name,c.teacher,c.startWeek,c.endWeek,c.room]),[['现代设计方法','教师甲',4,8,'瑞师楼（原3号教学楼）222'],['工程热化学概论','教师乙',10,17,'瑞师楼226']]);
+ assert.deepEqual(expand(codec.decodeShareCode(codec.encodeShareCode({settings:C.blank().settings,courses:r.courses})).courses),expand(r.courses));
+});
+test('同格三门与重复rowspan不漏课、不重复',()=>{
+ const t=grad(), first=t.grid[1][2];t.grid[1][2]=[first,first.replace('现代设计方法','课程二'),first.replace('现代设计方法','课程三')].join('\n\n');t.grid.push([...t.grid[1]]);
+ assert.equal(C.graduate(t).courses.length,3);
+});
+test('多师班不写入教师字段，备注教师姓单不误判单周',()=>{
+ const t=grad();t.grid[1][2]=t.grid[1][2].replace('教师甲 1班','1班(一班多师)');
+ assert.equal(C.graduate(t).courses[0].teacher,'');
+ t.grid[1][2]=t.grid[1][2].replace('1班(一班多师)','全日制1班(一班多师)');assert.equal(C.graduate(t).courses[0].teacher,'');
+ t.grid[1][2]=t.grid[1][2].replace('周次:2-17','周次:2-17(单老师)');
+ assert.equal(C.graduate(t).courses[0].teacher,'单老师');assert.equal(C.graduate(t).courses[0].weekType,'all');
+});
+test('换行课程名称、教师班级保留正确边界',()=>{
+ const t=grad();t.grid[1][2]=t.grid[1][2].replace('现代设计方法\n教师甲 1班','高等高分子化学与\n物理\n教师甲 材料+环境学\n院班');
+ assert.equal(C.graduate(t).courses[0].name,'高等高分子化学与物理');assert.equal(C.graduate(t).courses[0].teacher,'教师甲');
+});
+test('多门中某门周次损坏或边界缺失，整次读取失败',()=>{
+ const t=grad(),first=t.grid[1][2];t.grid[1][2]=first+'\n'+first.replace('周次:2-17','周次:2-?');assert.throws(()=>C.graduate(t));
+ t.grid[1][2]=first.replace('电话:','')+'\n'+first;assert.throws(()=>C.graduate(t));
+ t.grid[1][2]=first+'\n课程二';assert.throws(()=>C.graduate(t));
+});
+const home=()=>({source:'undergraduate-home',grid:C.weekdays.map((d,i)=>[d,i===0?'1-2节 (1-13|单周)\n有机化学AI\n通明楼(原5#教学楼)138\n1-2节 (2-10|双周)\n电工学\n通明楼(原5#教学楼)138':'',i===0?'9-10节 (6-7周)\n职业规划与就业指导':i===4?'7-8节 (1-8周)Agent时代：智能体设计与实践致本楼C座（原6#实验楼）214':''])});
+test('首页七天网格导入，教师留空并保留单双周和缺地点提示',()=>{
+ const r=C.parseCapture({kind:'undergraduate',tables:[home()]});assert.equal(r.courses.length,4);assert.ok(r.courses.every(c=>c.teacher===''));assert.ok(r.notices.some(n=>n.includes('教师信息未提供')));
+ assert.equal(r.courses[0].name,'有机化学AI');assert.equal(r.courses[0].weekType,'odd');assert.equal(r.courses[1].weekType,'even');assert.equal(r.courses[2].room,'');assert.equal(r.courses[3].room,'致本楼C座（原6#实验楼）214');
+ assert.deepEqual(expand(C.validate({settings:C.blank().settings,courses:r.courses}).courses),expand(r.courses));
+});
+test('首页未知但独立的地点保留，重复同格课程去重',()=>{
+ const t=home();t.grid[0][1]='1-2节 (1-16周)\n课程甲\n新实验中心301\n1-2节 (1-16周)\n课程甲\n新实验中心301';
+ const r=C.undergraduateHome(t);assert.equal(r.courses.filter(c=>c.name==='课程甲').length,1);assert.equal(r.courses[0].room,'新实验中心301');
+});
+test('首页缺一天、周次损坏、第二门损坏、无法对应星期均不导入部分结果',()=>{
+ const t=home();t.grid.pop();assert.throws(()=>C.undergraduateHome(t));
+ for(const broken of ['1-2节 (1-?周)\n课程甲','1-2节 (1-16周)\n课程甲\n3-?节 (2-8周)\n课程乙']){const t=home();t.grid[0][1]=broken;assert.throws(()=>C.undergraduateHome(t));}
+ const extra=home();extra.grid.push(['其他','1-2节 (1-2周)\n课程']);assert.throws(()=>C.undergraduateHome(extra));
+});
+test('个人完整课表优先于后台仍保留的首页，纯首页重复表不叠加',()=>{
+ assert.equal(C.parseCapture({kind:'undergraduate',tables:[home(),{text:fixture}]}).courses.length,20);
+ assert.equal(C.parseCapture({kind:'undergraduate',tables:[home(),home()]}).courses.length,4);
+});
 test('拒绝缺少星期日的表头',()=>{const t=grad();t.grid[0].pop();assert.throws(()=>C.graduate(t));});
 test('拒绝行列错位',()=>{const t=grad();t.grid[1].pop();assert.throws(()=>C.graduate(t));});
 test('不忽略缺少节次的非空课程单元格',()=>{const t=grad();t.grid[1][3]='研究生英语';assert.throws(()=>C.graduate(t));});

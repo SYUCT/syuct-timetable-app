@@ -44,11 +44,12 @@
         const explicit=/周[一二三四五六日天]\s*第\s*\d/.test(text);
         const grad=/节次\s*[:：]/.test(text) && /周次\s*[:：]/.test(text);
         const old=/第\s*\d{1,2}\s*节/.test(text) && /节\s*[/／]\s*(?:周|单周|双周)/.test(text);
-        if(!explicit && !grad && !old) {
-          if(/未安排上课时间|实践课|实习课|调.*停.*补/.test(text)) supplemental.push(text.slice(0,12000));
+        let g=grid(table);
+        const home=!explicit&&!grad&&!old && /节\s*[（(]/.test(text) && g.some(row=>/^星期[一二三四五六日天]$/.test(String(row[0]||'').trim()));
+        if(!explicit && !grad && !old && !home) {
+          if(/未安排上课时间|实践课|实习课|调课|调.*停.*补/.test(text)) supplemental.push(text.slice(0,12000));
           return;
         }
-        let g=grid(table);
         // Some graduate portals separate header/body tables inside one grid view.
         if(grad && weekdayCount(g.slice(0,3).flat().join(' '))<7) {
           const wrapper=table.closest('.datagrid-view,.el-table,.layui-table-view,.ant-table');
@@ -57,6 +58,7 @@
           if(header) g=[header,...g];
         }
         const html=cleanHtml(table), entry={text,html,grid:g};
+        if(home)entry.source='undergraduate-home';
         totalSize+=JSON.stringify(entry).length;
         if(totalSize>600000 || tables.length>=12) throw new Error('页面包含过多表格，请进入当前学期的个人课表页。');
         tables.push(entry);
@@ -73,7 +75,7 @@
       });
     }
     scan(document,0);
-    if(!tables.length) return JSON.stringify({error:unreadableFrames ? '课表位于无法读取的跨域框架中，请反馈页面地址以适配。' : '未找到完整课表。请登录后打开「学生个人课表」或「我的课程表」，不要使用首页摘要。'});
+    if(!tables.length) return JSON.stringify({error:unreadableFrames ? '课表位于无法读取的跨域框架中，请反馈页面地址以适配。' : '未找到可读取的课表。请登录后打开「学生个人课表」或「我的课程表」。'});
     return JSON.stringify({tables,supplemental:[...new Set(supplemental)],unreadableFrames});
   } catch(e) { return JSON.stringify({error:e.message || '读取失败'}); }
 })()

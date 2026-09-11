@@ -33,7 +33,7 @@ public class SchoolActivity extends Activity {
         TextView title = new TextView(this); title.setText((kind.equals("graduate") ? "硕士教务" : "本科教务") + " · " + host);
         title.setTextSize(15); title.setTextColor(Color.rgb(20,61,99)); title.setPadding(dp(14),dp(8),dp(14),dp(4)); root.addView(title);
         status = new TextView(this); status.setTextSize(17); status.setTextColor(Color.rgb(30,72,119));status.setTypeface(null,android.graphics.Typeface.BOLD);status.setLineSpacing(dp(3),1);status.setPadding(dp(14),dp(8),dp(14),dp(12));status.setBackgroundColor(Color.rgb(228,238,254));
-        status.setText(kind.equals("graduate") ? "登录 → 我的课程表 → 选择学期\n打开后，点击底部「读取课表」。" : "登录 → 信息查询 → 学生个人课表\n请勿读取首页摘要；打开后点「读取课表」。"); root.addView(status);
+        status.setText(kind.equals("graduate") ? "登录 → 我的课程表 → 选择学期\n打开后，点击底部「读取课表」。" : "登录后，点击底部「读取课表」。\n首页无教师信息，完整信息请进入「学生个人课表」。"); root.addView(status);
         web = new WebView(this); root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout buttons = new LinearLayout(this);
         Button back = new Button(this); back.setText("返回"); back.setOnClickListener(v->onBackPressed()); buttons.addView(back,new LinearLayout.LayoutParams(0,-2,1));
