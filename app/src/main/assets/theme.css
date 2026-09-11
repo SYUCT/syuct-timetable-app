@@ -48,6 +48,10 @@ button:active:not(:disabled){filter:brightness(.96)}
  @keyframes screen-enter{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}
 }
 @media(max-width:360px){#overviewToolbar strong::before{display:none}}
+#overviewToolbar label{flex:0 0 92px;min-width:92px;position:relative}
+#overviewToolbar label::after{content:'⌄';position:absolute;right:8px;top:10px;pointer-events:none;font-size:16px;color:#527394}
+#overviewToolbar #overviewWeek{appearance:none;-webkit-appearance:none;width:100%;padding:4px 23px 4px 8px;font-size:14px;white-space:nowrap;text-align:center}
+.week-control #weekSelect{appearance:none;-webkit-appearance:none;min-width:76px;padding:3px 6px;text-align:center}
 #communityDialog{width:min(420px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #fff;border-radius:26px;padding:22px;color:#203753;background:linear-gradient(150deg,#fff,#f3f7ff);box-shadow:0 24px 80px #1b365842}
 #communityDialog::backdrop{background:#20334c7a;backdrop-filter:blur(4px)}
 .community-heading{display:flex;align-items:center;gap:12px;margin-bottom:20px}.community-heading h2{margin:0;font-size:20px}.community-heading img{border-radius:50%}

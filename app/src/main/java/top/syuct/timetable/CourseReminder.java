@@ -11,12 +11,13 @@ import java.time.*;
 
 /** Only local schedule data is used. One next alarm, no polling service. */
 public final class CourseReminder extends BroadcastReceiver {
-    static final String CHANNEL="course_reminders",FIRE="top.syuct.timetable.COURSE_REMINDER";
+    static final String CHANNEL="course_notices",FIRE="top.syuct.timetable.COURSE_REMINDER";
     static SharedPreferences prefs(Context c){return c.getSharedPreferences("course_reminders",Context.MODE_PRIVATE);}
     static boolean enabled(Context c){return prefs(c).getBoolean("enabled",false);}
-    static boolean precise(Context c){return Build.VERSION.SDK_INT<31||c.getSystemService(AlarmManager.class).canScheduleExactAlarms();}
     static void channel(Context c){
-        NotificationChannel ch=new NotificationChannel(CHANNEL,"上课提醒",NotificationManager.IMPORTANCE_HIGH);
+        NotificationManager manager=c.getSystemService(NotificationManager.class);
+        if(manager.getNotificationChannel("course_reminders")!=null){manager.cancelAll();manager.deleteNotificationChannel("course_reminders");}
+        NotificationChannel ch=new NotificationChannel(CHANNEL,"上课提醒",NotificationManager.IMPORTANCE_DEFAULT);
         ch.setDescription("每次上课前15分钟提醒，使用系统默认通知声音");
         ch.setSound(Settings.System.DEFAULT_NOTIFICATION_URI,new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
         ch.enableVibration(true);ch.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
@@ -45,16 +46,14 @@ public final class CourseReminder extends BroadcastReceiver {
         if(!enabled(c)||!notifications(c))return;
         long next=ReminderPlanner.next(events(c),System.currentTimeMillis());if(next==0)return;
         PendingIntent pi=alarm(c,next);
-        try{if(precise(c)){manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,next,pi);return;}}catch(SecurityException ignored){}
         manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,next,pi);
     }
     static void enable(Context c,boolean value){prefs(c).edit().putBoolean("enabled",value).apply();if(!value)c.getSystemService(NotificationManager.class).cancelAll();schedule(c);}
     static String status(Context c){
         if(!enabled(c))return "未开启。开启后，每次上课前15分钟提醒。";
         if(!notifications(c))return "尚未允许通知，请在系统设置中开启。";
-        if(!precise(c))return "已开启；未允许准时提醒，通知可能延迟。";
         if(events(c).isEmpty())return "已开启。请导入课表、设置第一周日期和上课时间。";
-        return "已开启：每次上课前15分钟提醒，使用系统默认提示音。";
+        return "已开启：计划在上课前15分钟发送普通通知，使用系统默认提示音。省电模式下可能延迟。";
     }
     @Override public void onReceive(Context context,Intent intent){
         Context c=context.getApplicationContext();

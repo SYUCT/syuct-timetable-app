@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id), C=AppCore, codec=SYUCTTimetableCodec;
 let state=C.blank(), draft=null, selectedDay=C.schoolClock().weekday, selectedWeek=1, allDays=false, activePage='home', messageTimer;
-let allWeeks=false,detailIndex=-1;
+let allWeeks=false,detailIndex=-1,widgetEntry=false;
 const bridge=window.Native;
 function message(text){ clearTimeout(messageTimer); $('message').textContent=text; $('message').hidden=false; messageTimer=setTimeout(()=>$('message').hidden=true,7000); }
 function load(){
@@ -22,8 +22,10 @@ function show(page){
   if(page==='settings') { settingsFields($('mainSettings'),state.settings); renderTimes(); }
   window.scrollTo(0,0);
 }
-window.goHome=()=>{if($('communityDialog').open){$('communityDialog').close();return;}if($('courseDetail').open){$('courseDetail').close();return;}if($('firstWeekDialog').open){$('firstWeekDialog').close();return;}allDays=false;show('home');};
-window.openOverview=()=>{allDays=true;allWeeks=false;const w=C.currentWeek(state.settings);if(w>=1&&w<=state.settings.totalWeeks)selectedWeek=w;show('home');};
+function closeOverview(){if(widgetEntry&&bridge?.backToDesktop){widgetEntry=false;bridge.backToDesktop();return;}allDays=false;show('home');}
+window.setWidgetEntry=value=>{widgetEntry=value===true;};
+window.goHome=()=>{if($('communityDialog').open){$('communityDialog').close();return;}if($('courseDetail').open){$('courseDetail').close();return;}if($('firstWeekDialog').open){$('firstWeekDialog').close();return;}if(activePage==='home'&&allDays){closeOverview();return;}if(activePage==='home'&&bridge?.backToDesktop){bridge.backToDesktop();return;}allDays=false;show('home');};
+window.openOverview=(fromWidget=false)=>{widgetEntry=fromWidget===true;allDays=true;allWeeks=false;const w=C.currentWeek(state.settings);if(w>=1&&w<=state.settings.totalWeeks)selectedWeek=w;show('home');};
 window.refreshClock=()=>{if(activePage==='home')renderHome();};
 function el(tag,text,className){const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n;}
 function updateViewMode(){
@@ -181,7 +183,7 @@ $('prevWeek').onclick=()=>{selectedWeek--;renderHome();};$('nextWeek').onclick=(
 $('thisWeek').onclick=()=>{selectedWeek=C.currentWeek(state.settings)||1;renderHome();};
 $('weekSelect').onchange=e=>{selectedWeek=Number(e.target.value);renderHome();};
 $('toggleAll').onclick=()=>{allDays=!allDays;renderHome();};
-$('closeOverview').onclick=()=>{allDays=false;show('home');};
+$('closeOverview').onclick=closeOverview;
 $('closeDetail').onclick=()=>$('courseDetail').close();
 $('editDetail').onclick=()=>{
   const c=state.courses[detailIndex];if(!c)return;

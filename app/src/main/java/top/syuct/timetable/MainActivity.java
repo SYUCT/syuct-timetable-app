@@ -83,7 +83,8 @@ public class MainActivity extends Activity {
         if (ready && pending != null) {
             web.evaluateJavascript("window.receiveCapture(" + pending + ")", null); pending = null;
         }
-        if(ready&&pendingOverview){pendingOverview=false;web.evaluateJavascript("window.openOverview()",null);}
+        if(ready)web.evaluateJavascript("window.setWidgetEntry("+getIntent().getBooleanExtra("fromWidget",false)+")",null);
+        if(ready&&pendingOverview){pendingOverview=false;web.evaluateJavascript("window.openOverview("+getIntent().getBooleanExtra("fromWidget",false)+")",null);}
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);pendingOverview=TodayWidget.OPEN.equals(intent.getAction());deliver();}
     private void refreshWidget(){runOnUiThread(()->{try{TodayWidget.refreshAll(this);CourseReminder.schedule(this);}catch(RuntimeException ignored){Toast.makeText(this,"课表已保存，请重新打开应用更新提醒与小组件",Toast.LENGTH_SHORT).show();}});}
@@ -97,16 +98,13 @@ public class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},31);return;}
         if(!CourseReminder.notifications(this)){
             new AlertDialog.Builder(this).setTitle("允许上课通知").setMessage("请在系统通知设置中允许「上课提醒」。")
-                .setNegativeButton("取消",null).setPositiveButton("打开设置",(d,w)->openReminderSystemSettings(false)).show();return;
+                .setNegativeButton("取消",null).setPositiveButton("打开设置",(d,w)->openReminderSystemSettings()).show();return;
         }
-        if(!CourseReminder.precise(this))new AlertDialog.Builder(this).setTitle("允许准时提醒").setMessage("允许「闹钟和提醒」权限，才能按上课前15分钟安排通知。未允许时可能延迟。")
-            .setNegativeButton("稍后",null).setPositiveButton("去允许",(d,w)->openReminderSystemSettings(true)).show();
         CourseReminder.schedule(this);
     }
-    private void openReminderSystemSettings(boolean exact){
-        Intent intent=exact&&Build.VERSION.SDK_INT>=31?new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,android.net.Uri.parse("package:"+getPackageName())):
-            new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()).putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,CourseReminder.CHANNEL);
-        try{startActivity(intent);}catch(ActivityNotFoundException e){Toast.makeText(this,"请在系统应用设置中开启通知及闹钟提醒权限",Toast.LENGTH_LONG).show();}
+    private void openReminderSystemSettings(){
+        Intent intent=new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()).putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,CourseReminder.CHANNEL);
+        try{startActivity(intent);}catch(ActivityNotFoundException e){Toast.makeText(this,"请在系统应用设置中开启通知",Toast.LENGTH_LONG).show();}
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
@@ -140,12 +138,13 @@ public class MainActivity extends Activity {
         return o.toString();
     }
     public class LocalBridge {
+        @JavascriptInterface public void backToDesktop(){runOnUiThread(()->{getIntent().removeExtra("fromWidget");moveTaskToBack(true);});}
         @JavascriptInterface public void reminderSettings(){runOnUiThread(()->{
             boolean enabled=CourseReminder.enabled(MainActivity.this);
             new AlertDialog.Builder(MainActivity.this).setTitle("上课提醒 · 提前15分钟")
                 .setMessage(CourseReminder.status(MainActivity.this)+"\n\n遵守单双周和开课周次；未设置开学日期或节次时间的课程不提醒。声音遵循手机静音、勿扰和通知设置。")
                 .setNegativeButton("关闭窗口",null).setNeutralButton("权限与声音",(d,w)->{
-                    if(!CourseReminder.notifications(MainActivity.this)||!CourseReminder.precise(MainActivity.this))requestReminderPermissions();else openReminderSystemSettings(false);
+                    if(!CourseReminder.notifications(MainActivity.this))requestReminderPermissions();else openReminderSystemSettings();
                 }).setPositiveButton(enabled?"关闭提醒":"开启提醒",(d,w)->{CourseReminder.enable(MainActivity.this,!enabled);if(!enabled)requestReminderPermissions();}).show();
         });}
         @JavascriptInterface public void community(String target) {

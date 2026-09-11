@@ -25,7 +25,7 @@ public class TodayWidget extends AppWidgetProvider {
             v.setTextViewText(R.id.widget_empty,state.empty);
             Intent adapter=new Intent(c,TodayWidgetService.class).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id);
             adapter.setData(Uri.parse("syuct-widget://today/"+id));v.setRemoteAdapter(R.id.widget_list,adapter);v.setEmptyView(R.id.widget_list,R.id.widget_empty);
-            Intent open=new Intent(c,MainActivity.class).setAction(OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            Intent open=new Intent(c,MainActivity.class).setAction(OPEN).putExtra("fromWidget",true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent fixed=PendingIntent.getActivity(c,70,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
             v.setOnClickPendingIntent(R.id.widget_header,fixed);v.setOnClickPendingIntent(R.id.widget_empty,fixed);
             // Collection rows need a mutable template, always restricted to our explicit Activity.
@@ -37,7 +37,6 @@ public class TodayWidget extends AppWidgetProvider {
         // Non-wakeup: refresh at section boundaries when the screen is awake.
         if(state.times!=null){
             long next=LessonClock.nextBoundary(state.times,state.now);
-            try{if(CourseReminder.precise(c)){alarm.setExact(AlarmManager.RTC,next,alarmIntent(c));return;}}catch(SecurityException ignored){}
             alarm.set(AlarmManager.RTC,next,alarmIntent(c));
         }
     }

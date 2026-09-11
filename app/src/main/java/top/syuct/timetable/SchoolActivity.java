@@ -28,12 +28,12 @@ public class SchoolActivity extends Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(243,246,250));
         if (Build.VERSION.SDK_INT >= 30) root.setOnApplyWindowInsetsListener((v,i)-> {
-            android.graphics.Insets b=i.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()); v.setPadding(b.left,b.top,b.right,b.bottom); return i;
+            android.graphics.Insets b=i.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime()); v.setPadding(b.left,b.top,b.right,b.bottom); return WindowInsets.CONSUMED;
         }); else root.setFitsSystemWindows(true);
         TextView title = new TextView(this); title.setText((kind.equals("graduate") ? "硕士教务" : "本科教务") + " · " + host);
-        title.setTextSize(17); title.setTextColor(Color.rgb(20,61,99)); title.setPadding(16,14,16,6); root.addView(title);
-        status = new TextView(this); status.setTextSize(13); status.setPadding(16,4,16,8);
-        status.setText(kind.equals("graduate") ? "登录后进入「我的课程表」，选择学期，再点底部读取。" : "登录后进入「信息查询 → 学生个人课表」，不要读取首页摘要。"); root.addView(status);
+        title.setTextSize(15); title.setTextColor(Color.rgb(20,61,99)); title.setPadding(dp(14),dp(8),dp(14),dp(4)); root.addView(title);
+        status = new TextView(this); status.setTextSize(17); status.setTextColor(Color.rgb(30,72,119));status.setTypeface(null,android.graphics.Typeface.BOLD);status.setLineSpacing(dp(3),1);status.setPadding(dp(14),dp(8),dp(14),dp(12));status.setBackgroundColor(Color.rgb(228,238,254));
+        status.setText(kind.equals("graduate") ? "登录 → 我的课程表 → 选择学期\n打开后，点击底部「读取课表」。" : "登录 → 信息查询 → 学生个人课表\n请勿读取首页摘要；打开后点「读取课表」。"); root.addView(status);
         web = new WebView(this); root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout buttons = new LinearLayout(this);
         Button back = new Button(this); back.setText("返回"); back.setOnClickListener(v->onBackPressed()); buttons.addView(back,new LinearLayout.LayoutParams(0,-2,1));
@@ -54,7 +54,12 @@ public class SchoolActivity extends Activity {
                 navigation++; reading=false; read.setEnabled(false);
                 if(!Policy.school(url,host)) { v.stopLoading(); status.setText("该地址不在教务白名单内。"); }
             }
-            @Override public void onPageFinished(WebView v,String url) { read.setEnabled(Policy.school(url,host)); }
+            @Override public void onPageFinished(WebView v,String url) {
+                read.setEnabled(Policy.school(url,host));
+                if(kind.equals("undergraduate")&&Policy.school(url,host))try(InputStream in=getAssets().open("school-layout.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                    byte[] b=new byte[2048];int n;while((n=in.read(b))!=-1)out.write(b,0,n);v.evaluateJavascript(out.toString("UTF-8"),null);
+                }catch(IOException ignored){}
+            }
             @Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e) { h.cancel(); read.setEnabled(false); status.setText("教务网站证书验证失败，已停止连接。请勿忽略证书错误。"); }
             @Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e) {
                 if(r.isForMainFrame()) { status.setText("教务页面未加载成功，请检查网络后刷新。校内限制或认证跳转需另行适配。"); read.setEnabled(false); }
@@ -66,6 +71,7 @@ public class SchoolActivity extends Activity {
         web.setDownloadListener((u,a,b,c,d)->status.setText("首版仅支持读取网页课表；文件下载请使用系统浏览器。"));
         web.loadUrl("https://"+host+"/");
     }
+    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private void capture() {
         if(reading || !Policy.school(web.getUrl(),host)) return;
         reading=true; read.setEnabled(false); status.setText("正在读取当前课表，请勿切换页面…");
