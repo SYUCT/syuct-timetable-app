@@ -1,0 +1,3 @@
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="19%">
+    <bitmap android:src="@drawable/campus_badge" android:gravity="fill" android:filter="true" />
+</inset>

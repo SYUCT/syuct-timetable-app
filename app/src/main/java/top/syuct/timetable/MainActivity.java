@@ -16,24 +16,32 @@ public class MainActivity extends Activity {
     private WebView web;
     private String pending;
     private boolean ready;
+    private boolean pendingOverview;
     private static final int SCHOOL = 20;
     private static final int MAX_STATE = 400_000;
     private android.content.SharedPreferences prefs;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         prefs = getSharedPreferences("timetable", MODE_PRIVATE);
+        pendingOverview=TodayWidget.OPEN.equals(getIntent().getAction());
         web = new WebView(this);
+        WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0);
         web.setBackgroundColor(Color.rgb(243,246,250));
-        web.setFitsSystemWindows(true);
-        setContentView(web);
-        if (Build.VERSION.SDK_INT >= 30) web.setOnApplyWindowInsetsListener((v, insets) -> {
-            android.graphics.Insets b = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-            v.setPadding(b.left, b.top, b.right, b.bottom); return insets;
+        // Inset the parent: WebView padding does not reliably inset its HTML viewport.
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(243,246,250));
+        root.addView(web,new FrameLayout.LayoutParams(-1,-1));
+        setContentView(root);
+        if (Build.VERSION.SDK_INT >= 30) root.setOnApplyWindowInsetsListener((v, insets) -> {
+            android.graphics.Insets b = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+            v.setPadding(b.left, b.top, b.right, b.bottom); return WindowInsets.CONSUMED;
         });
-        if (Build.VERSION.SDK_INT < 30) web.setOnApplyWindowInsetsListener((v, i) -> {
+        if (Build.VERSION.SDK_INT < 30) root.setOnApplyWindowInsetsListener((v, i) -> {
             v.setPadding(i.getSystemWindowInsetLeft(), i.getSystemWindowInsetTop(), i.getSystemWindowInsetRight(), i.getSystemWindowInsetBottom()); return i;
         });
+        root.requestApplyInsets();
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setAllowFileAccess(false); s.setAllowContentAccess(false);
@@ -58,12 +66,12 @@ public class MainActivity extends Activity {
                 String path = r.getUrl().getPath();
                 if (!Policy.local(url) || path == null || !path.matches("/[a-zA-Z0-9_.-]+")) return blocked();
                 try {
-                    String type = path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "text/html";
+                    String type = path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : path.endsWith(".png") ? "image/png" : "text/html";
                     return new WebResourceResponse(type, "UTF-8", getAssets().open(path.substring(1)));
                 } catch (IOException e) { return blocked(); }
             }
             @Override public void onPageFinished(WebView v, String url) {
-                if (Policy.local(url)) { ready = true; deliver(); }
+                if (Policy.local(url)) { ready = true; deliver();offerReminders(); }
             }
         });
         web.loadUrl(Policy.LOCAL + "index.html");
@@ -75,7 +83,36 @@ public class MainActivity extends Activity {
         if (ready && pending != null) {
             web.evaluateJavascript("window.receiveCapture(" + pending + ")", null); pending = null;
         }
+        if(ready&&pendingOverview){pendingOverview=false;web.evaluateJavascript("window.openOverview()",null);}
     }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);pendingOverview=TodayWidget.OPEN.equals(intent.getAction());deliver();}
+    private void refreshWidget(){runOnUiThread(()->{try{TodayWidget.refreshAll(this);CourseReminder.schedule(this);}catch(RuntimeException ignored){Toast.makeText(this,"课表已保存，请重新打开应用更新提醒与小组件",Toast.LENGTH_SHORT).show();}});}
+    private void offerReminders(){
+        if(CourseReminder.prefs(this).contains("offered"))return;
+        CourseReminder.prefs(this).edit().putBoolean("offered",true).apply();
+        new AlertDialog.Builder(this).setTitle("开启上课提醒？").setMessage("每次上课前15分钟通知，使用系统默认提示音。可在设置中关闭。")
+            .setNegativeButton("暂不开启",null).setPositiveButton("开启",(d,w)->{CourseReminder.enable(this,true);requestReminderPermissions();}).show();
+    }
+    private void requestReminderPermissions(){
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},31);return;}
+        if(!CourseReminder.notifications(this)){
+            new AlertDialog.Builder(this).setTitle("允许上课通知").setMessage("请在系统通知设置中允许「上课提醒」。")
+                .setNegativeButton("取消",null).setPositiveButton("打开设置",(d,w)->openReminderSystemSettings(false)).show();return;
+        }
+        if(!CourseReminder.precise(this))new AlertDialog.Builder(this).setTitle("允许准时提醒").setMessage("允许「闹钟和提醒」权限，才能按上课前15分钟安排通知。未允许时可能延迟。")
+            .setNegativeButton("稍后",null).setPositiveButton("去允许",(d,w)->openReminderSystemSettings(true)).show();
+        CourseReminder.schedule(this);
+    }
+    private void openReminderSystemSettings(boolean exact){
+        Intent intent=exact&&Build.VERSION.SDK_INT>=31?new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,android.net.Uri.parse("package:"+getPackageName())):
+            new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()).putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,CourseReminder.CHANNEL);
+        try{startActivity(intent);}catch(ActivityNotFoundException e){Toast.makeText(this,"请在系统应用设置中开启通知及闹钟提醒权限",Toast.LENGTH_LONG).show();}
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
+        super.onRequestPermissionsResult(request,permissions,results);
+        if(request==31){if(results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED)requestReminderPermissions();else Toast.makeText(this,"未允许通知，上课提醒暂不可用。可在设置中开启。",Toast.LENGTH_LONG).show();}
+    }
+    @Override protected void onResume(){super.onResume();refreshWidget();if(ready)web.evaluateJavascript("window.refreshClock()",null);}
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == SCHOOL && result == RESULT_OK) {
@@ -90,6 +127,7 @@ public class MainActivity extends Activity {
         JSONArray list = o.getJSONArray("courses");
         JSONObject s = o.getJSONObject("settings");
         int total = s.getInt("totalWeeks");
+        if(s.has("periodTimes"))WidgetState.readTimes(s.getJSONArray("periodTimes"));
         if (total < 1 || total > 30 || list.length() > 200) throw new JSONException("数量超出范围");
         for (int i=0; i<list.length(); i++) {
             JSONObject c=list.getJSONObject(i);
@@ -102,18 +140,46 @@ public class MainActivity extends Activity {
         return o.toString();
     }
     public class LocalBridge {
+        @JavascriptInterface public void reminderSettings(){runOnUiThread(()->{
+            boolean enabled=CourseReminder.enabled(MainActivity.this);
+            new AlertDialog.Builder(MainActivity.this).setTitle("上课提醒 · 提前15分钟")
+                .setMessage(CourseReminder.status(MainActivity.this)+"\n\n遵守单双周和开课周次；未设置开学日期或节次时间的课程不提醒。声音遵循手机静音、勿扰和通知设置。")
+                .setNegativeButton("关闭窗口",null).setNeutralButton("权限与声音",(d,w)->{
+                    if(!CourseReminder.notifications(MainActivity.this)||!CourseReminder.precise(MainActivity.this))requestReminderPermissions();else openReminderSystemSettings(false);
+                }).setPositiveButton(enabled?"关闭提醒":"开启提醒",(d,w)->{CourseReminder.enable(MainActivity.this,!enabled);if(!enabled)requestReminderPermissions();}).show();
+        });}
+        @JavascriptInterface public void community(String target) {
+            if(!"github".equals(target)&&!"website".equals(target)&&!"group".equals(target))return;
+            runOnUiThread(()->{
+                if("group".equals(target)){
+                    android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+                    clipboard.setPrimaryClip(ClipData.newPlainText("新生交流群号","1170264357"));
+                    Toast.makeText(MainActivity.this,"群号已复制",Toast.LENGTH_SHORT).show();return;
+                }
+                String url="github".equals(target)?"https://github.com/SYUCT":"https://www.syuct.top/";
+                try {startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE));}
+                catch(ActivityNotFoundException e){Toast.makeText(MainActivity.this,"未找到可打开链接的浏览器",Toast.LENGTH_LONG).show();}
+            });
+        }
+        @JavascriptInterface public String defaultTimes(){return WidgetState.defaults(MainActivity.this);}
+        @JavascriptInterface public void addWidget(){runOnUiThread(()->{
+            android.appwidget.AppWidgetManager manager=android.appwidget.AppWidgetManager.getInstance(MainActivity.this);
+            if(manager.isRequestPinAppWidgetSupported())manager.requestPinAppWidget(new ComponentName(MainActivity.this,TodayWidget.class),null,null);
+            else Toast.makeText(MainActivity.this,"长按桌面空白处，在小组件中选择「化大课表」",Toast.LENGTH_LONG).show();
+        });}
         @JavascriptInterface public String load() { return prefs.getString("state", ""); }
         @JavascriptInterface public String save(String value) {
             try {
                 value = checkState(value);
                 boolean ok=prefs.edit().putString("backup", prefs.getString("state", "")).putString("state", value).commit();
+                if(ok)refreshWidget();
                 return ok ? "" : "保存失败，请检查存储空间";
             } catch(Exception e) { return "未保存：课表数据无效"; }
         }
         @JavascriptInterface public String restore() {
             String old=prefs.getString("backup", "");
             if(old.isEmpty()) return "没有上一版课表";
-            try { checkState(old); return prefs.edit().putString("backup",prefs.getString("state", "")).putString("state",old).commit() ? "" : "恢复失败"; }
+            try { checkState(old);boolean ok=prefs.edit().putString("backup",prefs.getString("state", "")).putString("state",old).commit();if(ok)refreshWidget();return ok ? "" : "恢复失败"; }
             catch(Exception e) { return "备份数据无效"; }
         }
         @JavascriptInterface public void school(String kind) {

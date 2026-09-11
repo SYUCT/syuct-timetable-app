@@ -1,0 +1,56 @@
+/* Packaged UI: short transitions only; no continuous animation. */
+:root{--blue:#3463c9;--muted:#6d7c98;color:#203753;background:#f1f5fc}
+body{background:radial-gradient(ellipse at 0 0,#e3efff 0,transparent 56%),radial-gradient(ellipse at 100% 0,#eee9fb 0,transparent 46%),#f4f7fc;background-attachment:fixed}
+.brand-badge{border-radius:50%;box-shadow:0 3px 10px #284f7d20;flex-shrink:0}
+.brand{padding-top:18px}.brand b{letter-spacing:.5px}.local{background:#ffffffb8;border:1px solid #dfe8f1;color:#59738c}
+.home-mode .hero{background:linear-gradient(118deg,#254985,#3867b8 62%,#517bca);border:1px solid #ffffff77;box-shadow:0 8px 24px #345d9825,inset 0 1px #ffffff30}
+.home-mode .hero h1{display:flex;align-items:center;gap:8px}
+.home-mode .hero h1::before{content:'';flex:0 0 24px;height:24px;background:url('campus-badge.png') center/contain no-repeat;filter:drop-shadow(0 2px 3px #17395450)}
+.week-control button,.week-control select{box-shadow:inset 0 1px #ffffff14}
+.section-title h2{font-size:16px;letter-spacing:.4px}.text-button{color:#3266bc}
+.days{padding:4px;background:#ffffffa8;border:1px solid #e2eaf5;border-radius:18px;box-shadow:0 4px 18px #23466a05}
+.days button{border-radius:12px}.days .selected{background:linear-gradient(145deg,#3a70c5,#275596);box-shadow:0 4px 10px #315c9b28}
+.course{border-radius:20px;background:linear-gradient(140deg,#fff,#fcfdff);box-shadow:0 5px 20px #264c7c09;border-top:1px solid #fff}
+.course .course-top{color:#6b7f9b}.course h3{color:#244768}.course.is-current{background:linear-gradient(130deg,#edfbf6,#fff);box-shadow:0 5px 20px #2e8c6114}
+.primary{background:linear-gradient(110deg,#386bd0,#497ee0);box-shadow:0 5px 14px #3b69b629,inset 0 1px #ffffff25;border-radius:14px}
+.secondary{background:#e9effb;color:#365fa2}.panel,.import-choice,.edit-card{border:1px solid #e3eaf5;background:#ffffffeb;box-shadow:0 6px 24px #2a477209}
+.import-choice .choice-icon{background:linear-gradient(145deg,#e8f0ff,#dce9fc);color:#3d67a5}.import-choice .teal{background:linear-gradient(145deg,#e7f4f2,#d7eee9);color:#3d7f76}
+nav{background:#ffffffed;border-top:1px solid #e0e8f3;box-shadow:0 -5px 24px #23466a07}
+nav button{min-width:76px;border-radius:14px;padding:5px 24px}nav button.active{background:#eaf1fc;color:#3463b5}
+#overviewToolbar strong{display:flex;align-items:center;gap:5px;font-size:12px;color:#284b7a;letter-spacing:.1px}
+#overviewToolbar strong::before{content:'';width:20px;height:20px;flex:0 0 20px;background:url('campus-badge.png') center/contain no-repeat}
+#overviewToolbar button,#overviewToolbar select{border:1px solid #d9e4f3;background:linear-gradient(160deg,#ffffffed,#eaf1fb);color:#365d94;box-shadow:0 2px 5px #244f8308,inset 0 1px #fff;border-radius:12px}
+#overviewToolbar #overviewNow{background:linear-gradient(130deg,#3869bf,#4a80d5);border-color:#4776bd;color:white;box-shadow:0 3px 9px #3a6ab52b}
+#overviewToolbar #overviewNow[aria-pressed=true]{background:linear-gradient(130deg,#6472b8,#7a8acc);border-color:#717fbf}
+#overviewRange{color:#627b99;font-size:10px;letter-spacing:.1px}
+.overview-mode .week-scroll{border:1px solid #d8e3f1;border-radius:15px;background:#fff;box-shadow:0 5px 22px #2849710b}
+.week-column{border-right-color:#e8eef6}.week-time-column{background:#f6f8fc}.week-time{color:#7790aa;border-bottom-color:#e8eef6}
+.overview-mode .week-heading{background:linear-gradient(#f4f8ff,#eaf1fc);color:#55759c;border-bottom-color:#dce7f5;font-weight:650}
+.overview-mode .week-heading.is-today{color:#2e61b2;background:linear-gradient(#e1ecff,#eef4ff);box-shadow:inset 0 -2px #5981c9}
+.overview-mode .week-course{border:2px solid white;border-radius:12px;box-shadow:inset 0 1px #ffffffaa,0 3px 8px #24466a0c;background-image:linear-gradient(145deg,#ffffff30,transparent)!important}
+.week-course strong{letter-spacing:.1px}.week-course small{opacity:.9}.week-course.is-current{box-shadow:inset 0 0 0 1px #63b996,0 3px 9px #4b97721a}
+.outside-week-badge{display:inline-block;align-self:flex-start;max-width:100%;padding:2px 3px;margin:0 0 5px;border-radius:5px;background:#f0f2f6;color:#626e83;font-size:9px;line-height:1.3;font-weight:600;border:1px solid #d5dce7;flex-shrink:0}
+.week-course.is-outside-week{filter:saturate(.62);border-style:dashed;border-color:#d8dfea}
+.course>.outside-week-badge{font-size:11px;padding:3px 7px}.current-badge{background:#daf2e8;color:#277254;border:1px solid #b7decb}
+#courseDetail,#firstWeekDialog{border:1px solid #fff;background:linear-gradient(150deg,#fff 55%,#f3f7ff);border-radius:26px;box-shadow:0 24px 80px #1b365842}
+#courseDetail::backdrop,#firstWeekDialog::backdrop{background:#20334c7a;backdrop-filter:blur(4px)}
+#detailName{font-size:20px;line-height:1.5;color:#27476d;margin:10px 0 0}#detailStatus{margin-bottom:0}
+.detail-status{display:inline-block;border-radius:7px;background:#e9f1fd;color:#5076ad;padding:4px 8px;font-size:11px}
+.detail-info{background:#ffffffa6;border-radius:15px;padding:0 12px;border:1px solid #e9eef7;margin:18px 0}
+.detail-info p{font-size:14px;padding:13px 0}.detail-label{color:#7a8ba3}#detailRoom{color:#365f99}
+button:active:not(:disabled){filter:brightness(.96)}
+@media(prefers-reduced-motion:no-preference){
+ button{transition:background .18s,box-shadow .18s,filter .18s,transform .18s}
+ button:active:not(:disabled){transform:scale(.97)}
+ dialog[open]{animation:dialog-enter .18s ease-out}
+ .screen:not([hidden]){animation:screen-enter .18s ease-out}
+ @keyframes dialog-enter{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+ @keyframes screen-enter{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}
+}
+@media(max-width:360px){#overviewToolbar strong::before{display:none}}
+#communityDialog{width:min(420px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #fff;border-radius:26px;padding:22px;color:#203753;background:linear-gradient(150deg,#fff,#f3f7ff);box-shadow:0 24px 80px #1b365842}
+#communityDialog::backdrop{background:#20334c7a;backdrop-filter:blur(4px)}
+.community-heading{display:flex;align-items:center;gap:12px;margin-bottom:20px}.community-heading h2{margin:0;font-size:20px}.community-heading img{border-radius:50%}
+.community-links{border:1px solid #e0e8f3;background:#ffffffb0;border-radius:16px;overflow:hidden}
+.community-links button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:82px;padding:16px 14px;border-radius:0;text-align:left;color:#294969;background:transparent;border-bottom:1px solid #e6edf5}
+.community-links button:last-child{border:0}.community-links strong,.community-links small{display:block}.community-links strong{font-size:14px}.community-links small{margin-top:5px;font-size:12px;color:#768ba4;overflow-wrap:anywhere}.community-action{flex-shrink:0;color:#386ac1;font-size:12px}

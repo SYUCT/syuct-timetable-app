@@ -9,7 +9,7 @@ if(!unsignedApk||!outputApk||!privateDirectory||!process.env.JAVA_HOME||!process
 const root=path.resolve(import.meta.dirname,'..');
 const privatePath=path.resolve(privateDirectory);
 if(privatePath===root||privatePath.startsWith(root+path.sep))throw Error('Signing directory must be outside repository');
-fs.mkdirSync(privatePath,{recursive:true,mode:0o700});
+if(!fs.existsSync(privatePath))fs.mkdirSync(privatePath,{recursive:true,mode:0o700});
 const credentialsPath=path.join(privatePath,'signing.json'),keyPath=path.join(privatePath,'syuct-timetable.jks');
 let credentials;
 if(fs.existsSync(credentialsPath))credentials=JSON.parse(fs.readFileSync(credentialsPath,'utf8'));

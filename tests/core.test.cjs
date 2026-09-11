@@ -53,3 +53,35 @@ test('拒绝超过200条与超长字段',()=>{
  assert.throws(()=>C.validate({settings:C.blank().settings,courses:Array(201).fill(course)}));
  assert.throws(()=>C.validate({settings:C.blank().settings,courses:[{...course,name:'课'.repeat(41)}]}));
 });
+test('横向全览按星期分列，冲突课程不互相遮盖',()=>{
+ const a={...course,weekday:1,startSection:1,endSection:2},b={...a,name:'冲突课程',endSection:4},c={...a,name:'第三节课程',startSection:3,endSection:3};
+ const layout=C.layoutWeek([a,b,c,{...course,weekday:7}]);assert.equal(layout.length,7);assert.equal(layout[0].lanes,2);assert.equal(layout[6].items.length,1);
+ assert.notEqual(layout[0].items.find(x=>x.course===a).lane,layout[0].items.find(x=>x.course===b).lane);
+ assert.equal(layout[0].items.find(x=>x.course===a).lane,layout[0].items.find(x=>x.course===c).lane);
+});
+test('当前课按节次判断，课间与结束边界不标记',()=>{
+ const c={...course,weekday:1,startWeek:1,endWeek:20},s={...C.blank().settings,firstWeekDate:'2026-08-31'};
+ for(const [time,expected] of [['07:59',false],['08:00',true],['08:49',true],['08:50',false],['08:59',false],['09:00',true],['09:49',true],['09:50',false]])assert.equal(C.active(c,s,new Date('2026-08-31T'+time+':00+08:00')),expected,time);
+});
+test('当前标记尊重单双周、日期和学期范围',()=>{
+ const c={...course,weekday:1,startWeek:1,endWeek:20,weekType:'odd'},s={...C.blank().settings,firstWeekDate:'2026-08-31'};
+ assert.equal(C.active(c,s,new Date('2026-09-07T08:10:00+08:00')),false);
+ assert.equal(C.active({...c,weekType:'even'},s,new Date('2026-09-07T08:10:00+08:00')),true);
+ assert.equal(C.active(c,s,new Date('2026-09-01T08:10:00+08:00')),false);
+ assert.equal(C.active(c,C.blank().settings,new Date('2026-08-31T08:10:00+08:00')),false);
+ assert.equal(C.active(c,{...s,totalWeeks:1},new Date('2026-09-14T08:10:00+08:00')),false);
+});
+test('采用北京时间，不随设备时区改变课程日期',()=>{
+ assert.equal(C.schoolClock(new Date('2026-08-30T16:30:00Z')).weekday,1);
+ assert.equal(C.schoolClock(new Date('2026-08-30T16:30:00Z')).date,'2026-08-31');
+});
+test('自定义第11节时间能保存，未知时间不猜测',()=>{
+ const c={...course,weekday:1,startSection:11,endSection:12,startWeek:1,endWeek:20},s={...C.blank().settings,firstWeekDate:'2026-08-31'};
+ const now=new Date('2026-08-31T20:35:00+08:00');assert.equal(C.active(c,s,now),false);
+ const periodTimes=structuredClone(C.defaultTimes);periodTimes[10]=['20:30','21:20'];
+ const validated=C.validate({settings:{...s,periodTimes},courses:[c]});assert.deepEqual(validated.settings.periodTimes,periodTimes);assert.equal(C.active(c,validated.settings,now),true);
+});
+test('节次时间必须成对、递增且合法',()=>{
+ for(const pair of [['08:00',''],['25:00','26:00'],['08:50','08:00']]){const t=structuredClone(C.defaultTimes);t[0]=pair;assert.throws(()=>C.validateTimes(t));}
+ const t=structuredClone(C.defaultTimes);t[1]=['08:30','09:10'];assert.throws(()=>C.validateTimes(t));
+});

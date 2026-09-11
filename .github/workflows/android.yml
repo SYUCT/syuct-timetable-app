@@ -25,8 +25,10 @@ jobs:
       - run: npm run test:browser
       - run: |
           mkdir -p test-results
-          javac -d test-results tests/PolicyTest.java app/src/main/java/top/syuct/timetable/Policy.java
+          javac -d test-results tests/PolicyTest.java tests/LessonClockTest.java tests/ReminderPlannerTest.java app/src/main/java/top/syuct/timetable/Policy.java app/src/main/java/top/syuct/timetable/LessonClock.java app/src/main/java/top/syuct/timetable/ReminderPlanner.java
           java -cp test-results PolicyTest
+          java -cp test-results LessonClockTest
+          java -cp test-results ReminderPlannerTest
       - run: ./gradlew --no-daemon assembleDebug lintDebug
       - uses: actions/upload-artifact@v4
         with:

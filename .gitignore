@@ -7,3 +7,4 @@ local.properties
 artifacts/
 node_modules/
 test-results/
+.verify/

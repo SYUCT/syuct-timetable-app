@@ -1,0 +1,5 @@
+<resources>
+    <string name="widget_description">今日课程与当前课标记，点击查看完整课表</string>
+    <string name="widget_title">今日课表</string>
+    <string name="widget_current">● 当前课</string>
+</resources>

@@ -1,9 +1,10 @@
 (function(root,factory){
   const api=factory(typeof module!=='undefined' ? require('./timetable-codec.js') : root.SYUCTTimetableCodec,
-    typeof module!=='undefined' ? require('./timetable-campus-parser.js') : root.SYUCTTimetableParser);
+    typeof module!=='undefined' ? require('./timetable-campus-parser.js') : root.SYUCTTimetableParser,
+    typeof module!=='undefined' ? require('./section-times.json') : JSON.parse(root.Native?.defaultTimes?.() || '[]'));
   if(typeof module!=='undefined') module.exports=api;
   root.AppCore=api;
-})(globalThis,function(codec,undergraduate){
+})(globalThis,function(codec,undergraduate,defaultTimes){
   'use strict';
   const blank=()=>({settings:{semester:'',firstWeekDate:'',totalWeeks:20},courses:[]});
   const weekdays=['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
@@ -20,6 +21,7 @@
       if(c.weekType!=='all' && !Array.from({length:c.endWeek-c.startWeek+1},(_,i)=>i+c.startWeek).some(w=>w%2===(c.weekType==='odd'?1:0))) throw Error('单双周与课程周次不符。');
       if([c.name,c.teacher,c.room].some(v=>v.length>40)) throw Error('课程名、教师、教室分别最多 40 字，以兼容小程序。');
     });
+    s.periodTimes=validateTimes(state.settings?.periodTimes || defaultTimes);
     return {settings:s,courses:decoded.courses};
   }
   function ranges(values,step=1){
@@ -113,12 +115,44 @@
     if(result.courses.length>200) throw Error('课程安排超过 200 条限制。');
     return result;
   }
+  function schoolClock(now=new Date()){
+    const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
+    const day=Date.UTC(+p.year,+p.month-1,+p.day);
+    return {date:`${p.year}-${p.month}-${p.day}`,day,weekday:new Date(day).getUTCDay()||7,minute:+p.hour*60 + +p.minute,time:`${p.hour}:${p.minute}`};
+  }
   function currentWeek(settings,now=new Date()){
     if(!settings.firstWeekDate) return null;
     const [y,m,d]=settings.firstWeekDate.split('-').map(Number);
-    const today=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate());
+    const today=schoolClock(now).day;
     return Math.floor((today-Date.UTC(y,m-1,d))/604800000)+1;
   }
   function inWeek(c,w){return c.startWeek<=w && w<=c.endWeek && (c.weekType==='all' || w%2===(c.weekType==='odd'?1:0));}
-  return {blank,validate,graduate,parseCapture,numbers,ranges,currentWeek,inWeek,weekdays};
+  function minute(t){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))throw Error('上课时间应为有效的时:分。');const [h,m]=t.split(':').map(Number);return h*60+m;}
+  function validateTimes(times){
+    if(!Array.isArray(times)||times.length!==12)throw Error('节次时间表必须有 12 行。');
+    let previous=-1;
+    return times.map((pair,i)=>{
+      if(!Array.isArray(pair)||pair.length!==2)throw Error('第 '+(i+1)+' 节时间格式不正确。');
+      const [a,b]=pair;if(a===''&&b==='')return ['',''];
+      const start=minute(a),end=minute(b);
+      if(end<=start||start<previous)throw Error('第 '+(i+1)+' 节时间重叠或顺序不正确。');previous=end;return [a,b];
+    });
+  }
+  function active(c,settings,now=new Date()){
+    const clock=schoolClock(now),w=currentWeek(settings,now);
+    if(w===null||w<1||w>settings.totalWeeks||c.weekday!==clock.weekday||!inWeek(c,w))return false;
+    const times=settings.periodTimes||defaultTimes;
+    for(let s=c.startSection;s<=c.endSection;s++){
+      const pair=times[s-1];if(pair?.[0]&&pair?.[1]&&clock.minute>=minute(pair[0])&&clock.minute<minute(pair[1]))return true;
+    }return false;
+  }
+  function layoutWeek(courses){
+    const output=[];
+    for(let d=1;d<=7;d++){
+      const ends=[],items=courses.filter(c=>c.weekday===d).slice().sort((a,b)=>a.startSection-b.startSection||a.endSection-b.endSection);
+      const placed=items.map(course=>{let lane=ends.findIndex(end=>end<course.startSection);if(lane<0)lane=ends.length;ends[lane]=course.endSection;return {course,lane};});
+      output.push({weekday:d,lanes:Math.max(1,ends.length),items:placed});
+    }return output;
+  }
+  return {blank,validate,graduate,parseCapture,numbers,ranges,currentWeek,inWeek,weekdays,defaultTimes,schoolClock,validateTimes,active,layoutWeek};
 });

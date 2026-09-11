@@ -1,4 +1,14 @@
-# 0.1.0-alpha1 验收记录
+# 验收记录
+
+## 0.2.0-alpha1
+
+25 项 Node、37 项浏览器流程、25项提醒计算断言、20 项原生时钟断言及14项域名断言通过；Release构建与lint完成（0错误）。安卓API35模拟器已完成安装、日期保存、示例课表导入、七列全览、桌面组件添加/今日显示/点击全览、当前课与课间边界检查。提醒入口、完整时段时间轴、自定义时间、交流弹窗、范围切换、非本周标记、缺失日期保护、详情编辑保存/取消、错误校验、按钮点击区域及四行详情已纳入测试。完整范围和未验证项见 [UPDATE-0.2.0.md](UPDATE-0.2.0.md) 和 [REMINDERS.md](REMINDERS.md)。
+
+`tools/emulator-qa.mjs` 仅供本机 `emulator-5554 / SYUCT_Preview_API35` 合成样本测试；不能指向个人手机。`clock-test` 仅在示例5–6节课表及默认组件位置下适用，会临时修改模拟器时间并在结束时恢复。不在CI运行，也不包含在APK内。
+
+`tools/emulator-layout.cjs /private/fixture.txt` 用于同一模拟器的本地 Debug 包布局验收，需要 `ANDROID_HOME` 和 Playwright。通过实际导入界面写入样本，检查竖屏全览、七天列边界、按周数量和详情字段。样本与截图只留在忽略的 `test-results/`；不上传 GitHub。Release 禁用 WebView 调试，测试后需覆盖安装 Release。
+
+## 0.1.0-alpha1 历史记录
 
 ## 已执行
 

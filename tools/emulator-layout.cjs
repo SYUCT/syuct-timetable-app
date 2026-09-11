@@ -1,0 +1,71 @@
+// Local-only QA: input stays outside APK/Git, never use with a personal device.
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {execFileSync}=require('node:child_process');
+const {chromium}=require('playwright');
+const codec=require('../app/src/main/assets/timetable-codec.js');
+const core=require('../app/src/main/assets/app-core.js');
+const fixture=process.argv[2];
+if(!fixture||!process.env.ANDROID_HOME)throw Error('Usage: ANDROID_HOME=... node tools/emulator-layout.cjs /private/fixture.txt');
+const code=fs.readFileSync(fixture,'utf8').trim(),expected=codec.decodeShareCode(code);
+const adbPath=path.join(process.env.ANDROID_HOME,'platform-tools/adb');
+const adb=(...args)=>execFileSync(adbPath,['-s','emulator-5554',...args],{encoding:'utf8',timeout:20000}).trim();
+if(!adb('emu','avd','name').startsWith('SYUCT_Preview_API35'))throw Error('Wrong emulator');
+const out=path.resolve(__dirname,'../test-results');fs.mkdirSync(out,{recursive:true});
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ adb('shell','am','start','-n','top.syuct.timetable/.MainActivity');
+ await delay(2500);
+ const pid=adb('shell','pidof','top.syuct.timetable').split(' ')[0];
+ const sockets=adb('shell','cat','/proc/net/unix');
+ const socket=sockets.split('\n').map(x=>x.split('@')[1]).find(x=>x==='webview_devtools_remote_'+pid);
+ if(!socket)throw Error('Install local debug APK first. Release must not expose debugging.');
+ const port=adb('forward','tcp:0','localabstract:'+socket);
+ let browser;
+ try{
+  browser=await chromium.connectOverCDP('http://127.0.0.1:'+port,{noDefaults:true});
+  const page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url()==='https://appassets.androidplatform.net/index.html');
+  if(!page)throw Error('Local UI not found');
+  page.setDefaultTimeout(12000);page.on('dialog',d=>d.accept());
+  await page.evaluate(()=>window.goHome());await page.waitForFunction(()=>innerHeight>innerWidth);
+  await page.locator('nav [data-page="import"]').click();
+  if(!await page.locator('#import details').evaluate(n=>n.open))await page.locator('#import details summary').click();
+  await page.locator('#importText').fill(code);await page.locator('#parseText').click();
+  assert.equal(await page.locator('.edit-card').count(),expected.courses.length);
+  await page.locator('#reviewed').check();await page.locator('#saveDraft').click();
+  const actual=await page.evaluate(()=>JSON.parse(Native.load()));
+  assert.deepEqual(actual.courses,expected.courses);assert.equal(actual.settings.totalWeeks,20);
+  console.log('PASS real fixture: '+actual.courses.length+' arrangements, native save exact, totalWeeks20');
+  await page.locator('#message').waitFor({state:'hidden'});
+  assert.ok(await page.locator('.hero').evaluate(n=>n.clientHeight<=105));
+  await page.screenshot({path:path.join(out,'private-home.png')});
+  await page.locator('#toggleAll').click();
+  await page.waitForFunction(()=>innerHeight>innerWidth);
+  assert.equal(await page.locator('.week-column').count(),7);
+  const metrics=await page.evaluate(()=>({width:innerWidth,height:innerHeight,toolbar:document.querySelector('#overviewToolbar').clientHeight,grid:document.querySelector('#weekOverview').clientHeight,overflow:document.querySelector('#weekOverview').scrollWidth-document.querySelector('#weekOverview').clientWidth,days:[...document.querySelectorAll('.week-column')].map(n=>({x:n.getBoundingClientRect().x,right:n.getBoundingClientRect().right}))}));
+  assert.equal(metrics.overflow,0);assert.ok(metrics.days.every(d=>d.x>=0&&d.right<=metrics.width));assert.ok(metrics.toolbar<=56);assert.ok(metrics.grid>metrics.height*.8);
+  assert.ok(metrics.height>metrics.width);console.log('PASS native portrait layout: '+JSON.stringify(metrics));
+  await page.locator('#overviewNow').click();assert.equal(await page.locator('#overviewNow').innerText(),'切换');assert.equal(await page.locator('.week-course').count(),actual.courses.length);assert.match(await page.locator('#overviewRange').innerText(),/全部/);
+  const current=await page.evaluate(()=>AppCore.currentWeek(JSON.parse(Native.load()).settings));assert.equal(await page.locator('.week-course.is-outside-week').count(),actual.courses.filter(c=>!core.inWeek(c,current)).length);
+  await page.screenshot({path:path.join(out,'private-all-weeks.png')});await page.locator('#overviewNow').click();assert.equal(await page.locator('#overviewNow').innerText(),'切换');
+  const dimensions=await page.locator('.week-time').first().evaluate(n=>({row:n.clientHeight,font:parseFloat(getComputedStyle(document.querySelector('.week-course')).fontSize)}));assert.ok(dimensions.row>=71);assert.ok(dimensions.font>=11);
+  for(const week of [2,10,16,17]){
+   await page.locator('#overviewWeek').selectOption(String(week));
+   assert.equal(await page.locator('.week-course').count(),actual.courses.filter(c=>core.inWeek(c,week)).length);
+  }
+  await page.locator('#overviewWeek').selectOption('2');
+  await page.screenshot({path:path.join(out,'private-portrait-overview.png')});
+  const long=actual.courses.filter(c=>core.inWeek(c,2)).sort((a,b)=>b.name.length-a.name.length)[0];
+  assert.ok(long);await page.getByRole('button',{name:long.name+'，'+core.weekdays[long.weekday-1]+'，点击查看详情',exact:true}).click();
+  assert.equal(await page.locator('#detailName').innerText(),long.name);assert.equal(await page.locator('#detailRoom').innerText(),long.room);assert.equal(await page.locator('#detailTeacher').innerText(),long.teacher);
+  await page.screenshot({path:path.join(out,'private-detail.png'),animations:'disabled'});
+  await page.locator('#editDetail').click();await page.locator('#detailFields [data-field="room"]').fill(long.room+'测');await page.locator('#cancelDetailEdit').click();assert.deepEqual(await page.evaluate(()=>JSON.parse(Native.load()).courses),actual.courses);
+  await page.locator('#editDetail').click();await page.locator('#detailFields [data-field="room"]').fill(long.room+'测');await page.locator('#saveDetail').click();assert.ok(await page.evaluate(()=>JSON.parse(Native.load()).courses.some(c=>c.room.endsWith('测'))));
+  await page.getByRole('button',{name:long.name+'，'+core.weekdays[long.weekday-1]+'，点击查看详情',exact:true}).click();await page.locator('#editDetail').click();await page.locator('#detailFields [data-field="room"]').fill(long.room);await page.locator('#saveDetail').click();assert.deepEqual(await page.evaluate(()=>JSON.parse(Native.load()).courses),actual.courses);console.log('PASS scope switch, larger cells/font, native detail edit save/cancel (sample restored)');
+  await page.locator('#closeOverview').click();await page.waitForFunction(()=>innerHeight>innerWidth);
+  assert.equal(await page.locator('nav').isVisible(),true);assert.equal(await page.evaluate(()=>JSON.parse(Native.load()).courses.length),expected.courses.length);
+  await page.locator('#setFirstWeek').click();assert.equal(await page.locator('#firstWeekDialog').isVisible(),true);await page.locator('#cancelFirstWeek').click();
+  await page.locator('#toggleAll').click();await page.waitForFunction(()=>innerHeight>innerWidth);
+  await page.locator('#weekOverview').evaluate(n=>n.scrollTop=0);
+  console.log('PASS selected weeks, full long-course details, portrait return and homepage date dialog');
+ }finally{await browser?.close();adb('forward','--remove','tcp:'+port);}
+})().catch(e=>{console.error(e);process.exitCode=1;});
