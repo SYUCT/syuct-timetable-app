@@ -1,0 +1,5 @@
+allprojects { afterEvaluate { p ->
+    if (p.plugins.hasPlugin('com.android.application')) {
+        p.android.buildTypes.debug.applicationIdSuffix = '.widgetprobe'
+    }
+} }
