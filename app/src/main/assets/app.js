@@ -203,6 +203,52 @@ $('saveDetail').onclick=()=>{
     persist(next);$('courseDetail').close();renderHome();message('修改已保存，小组件同步更新。');
   }catch(e){$('detailError').textContent=e.message;}
 };
+// A completed hold is the confirmation; taps, scrolling and lost focus never delete.
+function setupHoldDelete(){
+  const button=$('deleteDetail');let hold=null,frame=0;
+  function cancel(){
+    const previous=hold;hold=null;cancelAnimationFrame(frame);
+    button.style.removeProperty('--hold-progress');button.textContent='长按删除本条安排';
+    if(previous?.pointerId!==undefined&&button.hasPointerCapture(previous.pointerId))button.releasePointerCapture(previous.pointerId);
+  }
+  function tick(){
+    if(!hold)return;
+    if(!$('courseDetail').open||$('detailEdit').hidden||state.courses[detailIndex]!==hold.course){cancel();return;}
+    const progress=Math.min(1,(performance.now()-hold.start)/1200);
+    button.style.setProperty('--hold-progress',String(progress));
+    if(progress<1){frame=requestAnimationFrame(tick);return;}
+    cancel();
+    try{
+      const next=structuredClone(state);next.courses.splice(detailIndex,1);
+      persist(next);detailIndex=-1;$('courseDetail').close();renderHome();
+      message('本条安排已删除。可在设置中恢复上一次保存。');
+    }catch(e){$('detailError').textContent=e.message;}
+  }
+  function begin(extra){
+    if(hold||!$('courseDetail').open||$('detailEdit').hidden||!state.courses[detailIndex])return;
+    hold={...extra,course:state.courses[detailIndex],start:performance.now()};
+    button.textContent='继续按住，松手取消';frame=requestAnimationFrame(tick);
+  }
+  button.addEventListener('pointerdown',e=>{
+    if(e.button!==0||!e.isPrimary)return;
+    begin({pointerId:e.pointerId,x:e.clientX,y:e.clientY});
+    if(hold)button.setPointerCapture(e.pointerId);
+  });
+  button.addEventListener('pointermove',e=>{
+    if(!hold||hold.pointerId!==e.pointerId)return;
+    const r=button.getBoundingClientRect();
+    if(Math.hypot(e.clientX-hold.x,e.clientY-hold.y)>12||e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)cancel();
+  });
+  for(const type of ['pointerup','pointercancel','lostpointercapture','blur'])button.addEventListener(type,cancel);
+  button.addEventListener('contextmenu',e=>e.preventDefault());
+  button.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();if(!e.repeat)begin({key:e.key});}else cancel();});
+  button.addEventListener('keyup',cancel);
+  button.addEventListener('click',e=>e.preventDefault());
+  for(const type of ['close','cancel','scroll'])$('courseDetail').addEventListener(type,cancel);
+  window.addEventListener('blur',cancel);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancel();});
+}
+setupHoldDelete();
 $('overviewPrev').onclick=()=>{selectedWeek--;renderHome();};$('overviewNext').onclick=()=>{selectedWeek++;renderHome();};
 $('overviewNow').onclick=()=>{allWeeks=!allWeeks;if(!allWeeks){const w=C.currentWeek(state.settings);if(w>=1&&w<=state.settings.totalWeeks)selectedWeek=w;}renderHome();};
 $('overviewWeek').onchange=e=>{selectedWeek=Number(e.target.value);renderHome();};

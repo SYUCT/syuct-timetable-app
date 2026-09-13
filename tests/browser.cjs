@@ -65,6 +65,18 @@ const server=http.createServer((req,res)=>{
   await page.locator('#quickFirstWeek').fill('2026-08-31');await page.locator('#confirmFirstWeek').click();
   assert.equal(await page.locator('#firstWeekDialog').isVisible(),false);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')).settings.firstWeekDate),'2026-08-31');count++;console.log('PASS 首页直接保存第一周，并拒绝非周一');
   assert.ok(await page.locator('.hero').evaluate(n=>n.getBoundingClientRect().height<105));count++;console.log('PASS 首页头部压缩为两行');
+  for(const width of [320,360,390,412,550]){
+    await page.setViewportSize({width,height:844});await page.locator('#weekSelect').selectOption('20');
+    for(const zoom of [1,1.3]){
+      await page.locator('.week-control').evaluate((n,scale)=>{n.querySelectorAll('button,select').forEach(x=>x.style.fontSize=(12*scale)+'px');},zoom);
+      assert.ok(await page.locator('#thisWeek,#weekSelect').evaluateAll(ns=>ns.every(n=>{const s=getComputedStyle(n),c=document.createElement('canvas').getContext('2d');c.font=s.font;return c.measureText(n.tagName==='SELECT'?n.selectedOptions[0].textContent:n.textContent).width<=n.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight);})),width+'px text fits');
+      assert.ok(await page.locator('.week-control').evaluate(n=>Array.from(n.children).every(x=>x.getBoundingClientRect().right<=n.getBoundingClientRect().right+1)));
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    }
+  }
+  await page.locator('.week-control').evaluate(n=>n.querySelectorAll('button,select').forEach(x=>x.style.removeProperty('font-size')));
+  await page.setViewportSize({width:390,height:844});await page.locator('#thisWeek').click();assert.equal(await page.locator('#weekSelect').inputValue(),'1');
+  await page.screenshot({path:path.join(__dirname,'../test-results/home-week-fixed.png'),animations:'disabled'});count++;console.log('PASS 首页320–550px与130%文字下本周/第20周完整显示，按钮可返回本周');
   await page.locator('#toggleAll').click();assert.equal(await page.evaluate(()=>window.overviewRequested),undefined);assert.equal(await page.locator('.week-column').count(),7);
   const boxes=await page.locator('.week-column').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().x));assert.ok(boxes.every((x,i)=>!i||x>boxes[i-1]));
   assert.ok(await page.locator('#weekOverview').evaluate(n=>n.scrollWidth<=n.clientWidth));assert.ok(await page.locator('.week-column').evaluateAll(ns=>ns.every(n=>n.getBoundingClientRect().right<=innerWidth)));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&innerHeight>innerWidth));count++;console.log('PASS 竖屏七天同时可见，无横向裁切');
@@ -96,6 +108,38 @@ const server=http.createServer((req,res)=>{
   await page.locator('#settings details summary').click();await page.getByLabel('第 1 节开始',{exact:true}).fill('08:20');await page.locator('#saveTimes').click();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')).settings.periodTimes[0][0]),'08:20');await page.locator('nav [data-page="home"]').click();assert.ok(await page.locator('.course').count());assert.equal(await page.locator('.course.is-current').count(),0);count++;console.log('PASS 自定义上课时间影响当前课判断');
   await page.locator('#toggleAll').click();assert.equal(await page.locator('.week-time').first().getAttribute('aria-label'),'第 1–2 节，08:20–09:50');count++;console.log('PASS 时间轴使用用户设置，不硬编码时段');
+  const beforeDelete=await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')));
+  await page.locator('.week-course').first().click();await page.locator('#editDetail').click();
+  const deleteTarget=await page.evaluate(()=>detailIndex),remove=page.locator('#deleteDetail');
+  await remove.scrollIntoViewIfNeeded();await page.clock.runFor(250);
+  await remove.click();await page.clock.runFor(1500);assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state'))),beforeDelete);count++;console.log('PASS 删除按钮轻点不删除');
+  async function startHold(){await remove.scrollIntoViewIfNeeded();const b=await remove.boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();}
+  await startHold();await page.clock.runFor(600);assert.ok(await remove.evaluate(n=>Number(n.style.getPropertyValue('--hold-progress'))>0));
+  await page.screenshot({path:path.join(__dirname,'../test-results/hold-delete.png'),animations:'disabled'});
+  await page.mouse.up();await page.clock.runFor(1500);assert.equal(await remove.evaluate(n=>n.style.getPropertyValue('--hold-progress')),'');assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state'))),beforeDelete);count++;console.log('PASS 长按进度可见，提前松手取消');
+  for(const reason of ['move','pointercancel','blur','scroll','close']){
+    await startHold();await page.clock.runFor(300);
+    if(reason==='move')await page.mouse.move(0,0);
+    else if(reason==='close')await page.evaluate(()=>document.getElementById('courseDetail').close());
+    else if(reason==='scroll')await page.locator('#courseDetail').dispatchEvent('scroll');
+    else await remove.dispatchEvent(reason);
+    await page.clock.runFor(1500);await page.mouse.up();assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state'))),beforeDelete);
+  }
+  count++;console.log('PASS 移出、系统取消、失焦、滚动和关闭弹窗均取消删除');
+  await page.locator('.week-course').first().click();await page.locator('#editDetail').click();
+  await page.evaluate(()=>{window.testSave=Native.save;Native.save=()=> '测试保存失败';});
+  await startHold();await page.clock.runFor(1300);await page.mouse.up();assert.match(await page.locator('#detailError').innerText(),/测试保存失败/);assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state'))),beforeDelete);
+  await page.evaluate(()=>Native.save=window.testSave);count++;console.log('PASS 删除保存失败保留原课表并提示');
+  await startHold();await page.clock.runFor(1300);await page.mouse.up();
+  const expectedDelete=structuredClone(beforeDelete);expectedDelete.courses.splice(deleteTarget,1);
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state'))),expectedDelete);assert.equal(await page.locator('#courseDetail').isVisible(),false);
+  await page.reload();await page.locator('nav [data-page="settings"]').click();await page.locator('#exportCode').click();assert.equal(codec.decodeShareCode(await page.evaluate(()=>window.copied)).courses.length,expectedDelete.courses.length);
+  await page.locator('#restore').click();assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state'))),beforeDelete);count++;console.log('PASS 长按只删除所选安排，重载/课表码同步，可恢复');
+  await page.evaluate(value=>localStorage.setItem('test-state',JSON.stringify({...value,courses:[value.courses[0]]})),beforeDelete);
+  await page.reload();await page.locator('#toggleAll').click();await page.locator('.week-course').first().click();await page.locator('#editDetail').click();
+  await remove.scrollIntoViewIfNeeded();await remove.focus();await page.keyboard.down('Space');await page.clock.runFor(1300);await page.keyboard.up('Space');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')).courses.length),0);await page.locator('#closeOverview').click();assert.equal(await page.locator('#empty').isVisible(),true);count++;console.log('PASS 键盘长按与最后一条删除，显示空课表');
+  await page.evaluate(value=>localStorage.setItem('test-state',JSON.stringify(value)),beforeDelete);await page.reload();
   await page.goto(url+'/fixture');let packet=JSON.parse(await page.evaluate(collector));
   assert.equal(packet.tables.length,1);assert.ok(!JSON.stringify(packet).includes('DO_NOT_READ'));assert.ok(packet.supplemental.some(t=>t.includes('安全教育')));packet.kind='undergraduate';assert.equal(core.parseCapture(packet).courses.length,1);count++;console.log('PASS DOM采集排除账号与密码，保留未排课提示');
   fixtureHtml='<table>'+gradHead+gradBody+'</table>';await page.reload();packet=JSON.parse(await page.evaluate(collector));packet.kind='graduate';assert.equal(core.parseCapture(packet).courses[0].room,'瑞师楼（原3号教学楼）222');count++;console.log('PASS 硕士DOM采集→网格解析');
