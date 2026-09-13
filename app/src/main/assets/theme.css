@@ -1,4 +1,11 @@
 /* Packaged UI: short transitions only; no continuous animation. */
+/* Show the existing poster's complete code region without resampling its pixels. */
+#miniProgramDialog{width:min(400px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;border:1px solid #e0e8f3;border-radius:24px;padding:22px;color:#203753;background:#fff;box-shadow:0 24px 80px #1b365842}
+#miniProgramDialog::backdrop{background:#20334c7a;backdrop-filter:blur(4px)}
+#miniProgramDialog h2{margin:0 0 16px;text-align:center;font-size:20px}
+#miniProgramDialog p{font-size:13px;line-height:1.7}
+.mini-program-code{position:relative;width:min(100%,310px);aspect-ratio:365/345;overflow:hidden;margin:0 auto;background:white}
+.mini-program-code img{position:absolute;width:458.082192%;max-width:none;height:auto;left:-186.30137%;top:-55.072464%;pointer-events:none}
 :root{--blue:#3463c9;--muted:#6d7c98;color:#203753;background:#f1f5fc}
 body{background:radial-gradient(ellipse at 0 0,#e3efff 0,transparent 56%),radial-gradient(ellipse at 100% 0,#eee9fb 0,transparent 46%),#f4f7fc;background-attachment:fixed}
 .brand-badge{border-radius:50%;box-shadow:0 3px 10px #284f7d20;flex-shrink:0}

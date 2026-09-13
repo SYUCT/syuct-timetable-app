@@ -24,7 +24,7 @@ function show(page){
 }
 function closeOverview(){if(widgetEntry&&bridge?.backToDesktop){widgetEntry=false;bridge.backToDesktop();return;}allDays=false;show('home');}
 window.setWidgetEntry=value=>{widgetEntry=value===true;};
-window.goHome=()=>{if($('communityDialog').open){$('communityDialog').close();return;}if($('courseDetail').open){$('courseDetail').close();return;}if($('firstWeekDialog').open){$('firstWeekDialog').close();return;}if(activePage==='home'&&allDays){closeOverview();return;}if(activePage==='home'&&bridge?.backToDesktop){bridge.backToDesktop();return;}allDays=false;show('home');};
+window.goHome=()=>{if($('miniProgramDialog').open){$('miniProgramDialog').close();return;}if($('communityDialog').open){$('communityDialog').close();return;}if($('courseDetail').open){$('courseDetail').close();return;}if($('firstWeekDialog').open){$('firstWeekDialog').close();return;}if(activePage==='home'&&allDays){closeOverview();return;}if(activePage==='home'&&bridge?.backToDesktop){bridge.backToDesktop();return;}allDays=false;show('home');};
 window.openOverview=(fromWidget=false)=>{widgetEntry=fromWidget===true;allDays=true;allWeeks=false;const w=C.currentWeek(state.settings);if(w>=1&&w<=state.settings.totalWeeks)selectedWeek=w;show('home');};
 window.refreshClock=()=>{if(activePage==='home')renderHome();};
 function el(tag,text,className){const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n;}
@@ -292,6 +292,8 @@ $('restore').onclick=()=>{
 };
 $('clearLogin').onclick=()=>bridge?.clearLogin();
 $('openCommunity').onclick=()=>$('communityDialog').showModal();
+$('openMiniProgram').onclick=()=>$('miniProgramDialog').showModal();
+$('closeMiniProgram').onclick=()=>$('miniProgramDialog').close();
 $('closeCommunity').onclick=()=>$('communityDialog').close();
 document.querySelectorAll('[data-community]').forEach(b=>b.onclick=()=>{if(bridge?.community)bridge.community(b.dataset.community);else message('请在新版安卓 App 中使用此入口。');});
 $('setFirstWeek').onclick=()=>{$('quickFirstWeek').value=state.settings.firstWeekDate||'';$('firstWeekError').textContent='';$('firstWeekDialog').showModal();};

@@ -117,6 +117,25 @@ const server=http.createServer((req,res)=>{
   await page.locator('#checkUpdate').click();await page.evaluate(id=>window.receiveUpdateCheck({requestId:id,status:'available',versionCode:7,versionName:'stale'}),staleId);assert.match(await page.locator('#updateStatus').innerText(),/正在连接/);
   await page.evaluate(()=>window.receiveUpdateCheck({requestId:window.lastUpdateId,status:'error',message:'暂时无法连接官网，请检查网络后重试。'}));assert.match(await page.locator('#updateStatus').innerText(),/检查网络/);assert.equal(await page.locator('#checkUpdate').isEnabled(),true);count++;console.log('PASS 超时与离线提示可重试，过期响应不覆盖新检测');
   assert.equal(updateDialogs,0);page.off('dialog',trackUpdateDialog);count++;console.log('PASS 更新全流程不弹窗');
+  const miniSaved=await page.evaluate(()=>localStorage.getItem('test-state'));
+  await page.locator('.mini-program-code img').evaluate(img=>img.decode());
+  assert.match(await page.locator('.mini-program-code img').getAttribute('src'),/^mini-program-poster\.webp$/);
+  await context.setOffline(true);
+  for(const width of [320,390,550]){
+    await page.setViewportSize({width,height:740});await page.locator('#openMiniProgram').click();
+    assert.equal(await page.locator('#miniProgramDialog').isVisible(),true);
+    assert.equal(await page.locator('.mini-program-code img').evaluate(img=>img.naturalWidth),1672);
+    const bounds=await page.locator('#miniProgramDialog').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width);
+    assert.equal(await page.locator('#miniProgramDialog').evaluate(d=>d.scrollWidth<=d.clientWidth),true);
+    await page.locator('#closeMiniProgram').click();assert.equal(await page.locator('#miniProgramDialog').isVisible(),false);
+  }
+  count++;console.log('PASS 三种窄屏二维码完整布局、离线打开和按钮关闭');
+  await page.setViewportSize({width:390,height:844});await page.locator('#openMiniProgram').click();
+  await page.screenshot({path:path.join(__dirname,'../test-results/mini-program-dialog.png'),animations:'disabled'});
+  await page.evaluate(()=>window.goHome());assert.equal(await page.locator('#miniProgramDialog').isVisible(),false);assert.equal(await page.locator('#settings').isVisible(),true);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('test-state')),miniSaved);
+  await page.locator('#openMiniProgram').click();await page.keyboard.press('Escape');assert.equal(await page.locator('#miniProgramDialog').isVisible(),false);
+  await context.setOffline(false);count++;console.log('PASS 二维码系统返回/Escape关闭，课表数据不变');
   const communityState=await page.evaluate(()=>localStorage.getItem('test-state'));await page.locator('#openCommunity').click();assert.equal(await page.locator('#communityDialog').isVisible(),true);assert.equal(await page.locator('[data-community]').count(),3);assert.match(await page.locator('#communityDialog').innerText(),/github.com\/SYUCT/);assert.match(await page.locator('#communityDialog').innerText(),/新生交流群/);assert.match(await page.locator('#communityDialog').innerText(),/1170264357/);assert.match(await page.locator('#communityDialog').innerText(),/www.syuct.top/);
   for(const target of ['github','group','website']){await page.locator('[data-community="'+target+'"]').click();assert.equal(await page.evaluate(()=>window.communityTarget),target);}
   await page.screenshot({path:path.join(__dirname,'../test-results/community-dialog.png'),animations:'disabled'});await page.evaluate(()=>window.goHome());assert.equal(await page.locator('#communityDialog').isVisible(),false);assert.equal(await page.locator('#settings').isVisible(),true);assert.equal(await page.evaluate(()=>localStorage.getItem('test-state')),communityState);await page.locator('#openCommunity').click();await page.locator('#closeCommunity').click();assert.equal(await page.locator('#communityDialog').isVisible(),false);count++;console.log('PASS 项目交流弹窗三入口与关闭，不更改课表');
