@@ -20,6 +20,19 @@ public class MainActivity extends Activity {
     private static final int SCHOOL = 20;
     private static final int MAX_STATE = 400_000;
     private android.content.SharedPreferences prefs;
+    private final java.util.concurrent.atomic.AtomicBoolean checkingUpdate=new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile int availableUpdateCode;
+
+    private void updateResult(JSONObject result,int requestId){
+        try{result.put("requestId",requestId);}catch(JSONException ignored){return;}
+        runOnUiThread(()->{
+            if(isFinishing()||isDestroyed()||!ready)return;
+            web.evaluateJavascript("window.receiveUpdateCheck && window.receiveUpdateCheck(JSON.parse("+JSONObject.quote(result.toString())+"))",null);
+        });
+    }
+    private void updateFailure(String text,int requestId){
+        try{updateResult(new JSONObject().put("status","error").put("message",text),requestId);}catch(JSONException ignored){}
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -138,6 +151,33 @@ public class MainActivity extends Activity {
         return o.toString();
     }
     public class LocalBridge {
+        @JavascriptInterface public String appVersion(){
+            try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "未知版本";}
+        }
+        @JavascriptInterface public void checkUpdate(int requestId){
+            if(requestId<=0)return;
+            if(!checkingUpdate.compareAndSet(false,true)){updateFailure("上一次检测尚未结束，请稍后重试。",requestId);return;}
+            availableUpdateCode=0;
+            new Thread(()->{
+                try{
+                    android.content.pm.PackageInfo info=getPackageManager().getPackageInfo(getPackageName(),0);
+                    long installed=Build.VERSION.SDK_INT>=28?info.getLongVersionCode():info.versionCode;
+                    JSONObject result=UpdateChecker.check(installed);
+                    if("available".equals(result.getString("status")))availableUpdateCode=result.getInt("versionCode");
+                    updateResult(result,requestId);
+                }catch(java.net.SocketTimeoutException e){updateFailure("检测超时，请稍后重试。",requestId);}
+                catch(java.io.IOException e){updateFailure("暂时无法连接官网，请检查网络后重试。",requestId);}
+                catch(Exception e){updateFailure("官网版本信息暂不可用，请稍后重试。",requestId);}
+                finally{checkingUpdate.set(false);}
+            },"syuct-update-check").start();
+        }
+        @JavascriptInterface public void downloadUpdate(int expectedCode){
+            final int code=availableUpdateCode;if(code<=0||code!=expectedCode)return;
+            runOnUiThread(()->{
+                try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(UpdatePolicy.downloadFor(code))).addCategory(Intent.CATEGORY_BROWSABLE));}
+                catch(ActivityNotFoundException e){if(!isDestroyed())web.evaluateJavascript("window.updateDownloadFailed && window.updateDownloadFailed()",null);}
+            });
+        }
         @JavascriptInterface public void backToDesktop(){runOnUiThread(()->{getIntent().removeExtra("fromWidget");moveTaskToBack(true);});}
         @JavascriptInterface public void reminderSettings(){runOnUiThread(()->{
             boolean enabled=CourseReminder.enabled(MainActivity.this);

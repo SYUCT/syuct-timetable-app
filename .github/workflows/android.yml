@@ -25,10 +25,17 @@ jobs:
       - run: npm run test:browser
       - run: |
           mkdir -p test-results
-          javac -d test-results tests/PolicyTest.java tests/LessonClockTest.java tests/ReminderPlannerTest.java app/src/main/java/top/syuct/timetable/Policy.java app/src/main/java/top/syuct/timetable/LessonClock.java app/src/main/java/top/syuct/timetable/ReminderPlanner.java
+          javac -d test-results tests/PolicyTest.java tests/LessonClockTest.java tests/ReminderPlannerTest.java tests/UpdatePolicyTest.java app/src/main/java/top/syuct/timetable/Policy.java app/src/main/java/top/syuct/timetable/LessonClock.java app/src/main/java/top/syuct/timetable/ReminderPlanner.java app/src/main/java/top/syuct/timetable/UpdatePolicy.java
           java -cp test-results PolicyTest
           java -cp test-results LessonClockTest
           java -cp test-results ReminderPlannerTest
+          java -cp test-results UpdatePolicyTest
+      - name: Verify update manifest parsing and HTTPS rules
+        run: |
+          curl --fail --location --max-time 30 https://repo.maven.apache.org/maven2/org/json/json/20240303/json-20240303.jar -o test-results/json-test.jar
+          echo '3cf6cd6892e32e2b4c1c39e0f52f5248a2f5b37646fdfbb79a66b46b618414ed  test-results/json-test.jar' | sha256sum -c -
+          javac -cp test-results/json-test.jar -d test-results tests/UpdateCheckerTest.java app/src/main/java/top/syuct/timetable/UpdatePolicy.java app/src/main/java/top/syuct/timetable/UpdateChecker.java
+          java -cp test-results:test-results/json-test.jar top.syuct.timetable.UpdateCheckerTest
       - run: ./gradlew --no-daemon assembleDebug lintDebug
       - uses: actions/upload-artifact@v4
         with:

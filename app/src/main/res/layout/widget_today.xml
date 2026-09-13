@@ -4,7 +4,7 @@
             <TextView android:id="@+id/widget_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_title" android:textSize="17sp" android:textStyle="bold" android:textColor="#173D60"/>
             <TextView android:id="@+id/widget_date" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="#71859B" android:layout_marginTop="4dp"/>
         </LinearLayout>
-        <ImageView android:layout_width="36dp" android:layout_height="36dp" android:layout_marginBottom="10dp" android:src="@drawable/campus_badge" android:importantForAccessibility="no"/>
+        <ImageView android:layout_width="44dp" android:layout_height="44dp" android:layout_marginStart="8dp" android:layout_marginBottom="10dp" android:scaleType="fitCenter" android:src="@drawable/campus_badge" android:importantForAccessibility="no"/>
     </LinearLayout>
     <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <ListView android:id="@+id/widget_list" android:layout_width="match_parent" android:layout_height="match_parent" android:divider="@android:color/transparent" android:dividerHeight="6dp"/>

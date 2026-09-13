@@ -302,6 +302,28 @@ $('confirmFirstWeek').onclick=()=>{
 };
 $('addWidget').onclick=()=>bridge?.addWidget?bridge.addWidget():message('请长按安卓桌面空白处，在小组件中选择「化大课表」。');
 $('reminderSettings').onclick=()=>bridge?.reminderSettings?bridge.reminderSettings():message('请在新版安卓 App 中设置上课提醒。');
+let updatePending=false,updateTimer,updateRequestId=0,updateAvailableCode=0;
+if(bridge?.appVersion)$('installedVersion').textContent='当前版本 '+bridge.appVersion();
+window.receiveUpdateCheck=result=>{
+  if(!updatePending||result?.requestId!==updateRequestId)return;
+  updatePending=false;clearTimeout(updateTimer);$('checkUpdate').disabled=false;$('checkUpdate').textContent='检测更新';
+  const available=result?.status==='available';
+  updateAvailableCode=available?result.versionCode:0;
+  $('downloadUpdate').hidden=!available;$('updateInstallHint').hidden=!available;
+  $('updateNotes').hidden=!available||!result.notes;$('updateNotes').textContent=available?result.notes||'':'';
+  $('updateStatus').textContent=available?'发现新版本 '+result.versionName:result?.status==='current'?'当前已是最新版本。':result?.message||'检测失败，请稍后重试。';
+};
+$('checkUpdate').onclick=()=>{
+  if(updatePending)return;
+  $('downloadUpdate').hidden=true;$('updateInstallHint').hidden=true;$('updateNotes').hidden=true;
+  if(!bridge?.checkUpdate){$('updateStatus').textContent='请在安卓 App 中检测更新。';return;}
+  updatePending=true;updateAvailableCode=0;const requestId=++updateRequestId;
+  $('checkUpdate').disabled=true;$('checkUpdate').textContent='检测中…';$('updateStatus').textContent='正在连接官网…';
+  updateTimer=setTimeout(()=>window.receiveUpdateCheck({requestId,status:'error',message:'检测超时，请稍后重试。'}),20000);
+  try{bridge.checkUpdate(requestId);}catch{window.receiveUpdateCheck({requestId,status:'error',message:'检测失败，请稍后重试。'});}
+};
+$('downloadUpdate').onclick=()=>{if(bridge?.downloadUpdate&&updateAvailableCode)bridge.downloadUpdate(updateAvailableCode);};
+window.updateDownloadFailed=()=>{$('updateStatus').textContent='未找到浏览器，请访问 www.syuct.top 下载安装包。';};
 $('saveTimes').onclick=()=>{
   try{const periodTimes=Array.from($('periodTimes').children,row=>Array.from(row.querySelectorAll('input'),i=>i.value));persist({...state,settings:{...state.settings,periodTimes}});message('上课时间已保存，小组件同步更新。');}catch(e){message(e.message);}
 };

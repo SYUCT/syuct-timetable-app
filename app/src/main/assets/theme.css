@@ -63,6 +63,8 @@ button:active:not(:disabled){filter:brightness(.96)}
 .hold-delete::before{content:'';position:absolute;inset:0;z-index:-1;background:#f0c6c1;transform:scaleX(var(--hold-progress,0));transform-origin:left}
 .hold-delete:active:not(:disabled){transform:none;filter:none}
 .delete-hint{font-size:12px;color:#7a6c70;margin:6px 0 0;text-align:center}
+.update-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.update-heading h2{margin:0 0 6px}.update-heading small{overflow-wrap:anywhere}.update-heading>div{min-width:0}.update-heading button{flex-shrink:0;min-height:44px;padding:10px 14px;white-space:nowrap}
+.update-panel p{font-size:13px;line-height:1.7;margin:14px 0 0;overflow-wrap:anywhere}.update-panel #updateNotes{white-space:pre-line;color:#60768e}
 #communityDialog{width:min(420px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #fff;border-radius:26px;padding:22px;color:#203753;background:linear-gradient(150deg,#fff,#f3f7ff);box-shadow:0 24px 80px #1b365842}
 #communityDialog::backdrop{background:#20334c7a;backdrop-filter:blur(4px)}
 .community-heading{display:flex;align-items:center;gap:12px;margin-bottom:20px}.community-heading h2{margin:0;font-size:20px}.community-heading img{border-radius:50%}
