@@ -29,7 +29,16 @@ public final class ReminderPlanner {
         out.sort(Comparator.comparingLong(e->e.remind));return out;
     }
     public static long next(List<Event> events,long now){
-        return events.stream().filter(e->e.remind>now).mapToLong(e->e.remind).min().orElse(0);
+        return next(events,now,Collections.emptySet());
+    }
+    public static long next(List<Event> events,long now,Set<String> sent){
+        return events.stream().filter(e->e.remind>now&&!sent.contains(e.key)).mapToLong(e->e.remind).min().orElse(0);
+    }
+    /** Reconcile the whole pre-class window, not just one possibly stale alarm timestamp. */
+    public static List<Event> pending(List<Event> events,long now,Set<String> sent){
+        List<Event> out=new ArrayList<>();
+        for(Event e:events)if(e.remind<=now&&now<e.start&&!sent.contains(e.key))out.add(e);
+        return out;
     }
     public static List<Event> due(List<Event> events,long scheduled,long now,Set<String> sent){
         List<Event> out=new ArrayList<>();

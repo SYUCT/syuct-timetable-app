@@ -2,11 +2,11 @@
 
 独立 Android 课表工具，内置教务 WebView，读取后核对并保存本机。与 SYUCT-web 网站分开维护。
 
-当前代码版本 **0.2.6-alpha1**。设置页新增“小程序二维码”，离线可查看。课表仍通过 SYUCT-TT2 课表码手动导入，不自动同步，无新增权限。变更与验收记录见 [UPDATE-0.2.6.md](UPDATE-0.2.6.md)，已发布版本以 Releases 为准。
+当前试验版本 **0.2.8-alpha1**。新增可选的课前实时倒计时，默认关闭；实际提升尚未完成验证，支持的平台尝试上岛，其他设备保留普通通知。只增加实时通知的非运行时声明，无闹钟特殊权限或常驻服务。见 [UPDATE-0.2.8.md](UPDATE-0.2.8.md)，已发布版本以 Releases 为准。
 
 ## 使用
 
-1. 从本仓库 Releases 下载已发布的 APK，在安卓手机安装。0.2.6 安装包名为 `SYUCT-Timetable-0.2.6-alpha1.apk`。本版起可在设置中点击「检测更新」，已有旧版需先手动覆盖安装一次。
+1. 从本仓库 Releases 下载已发布的 APK，在安卓手机安装。本次构建包名为 `SYUCT-Timetable-0.2.8-alpha1.apk`。设置中可点击「检测更新」。
 2. 选择「导入 → 本科教务」或「硕士教务」，在学校页面自行登录。
 3. 本科可读取首页七天课表（教师信息留空），完整信息请进入「信息查询 → 学生个人课表」；硕士进入「我的课程表」，选择目标学期。
 4. 点击底部「读取课表」，核对课程、单双周和教室，确认后保存。
@@ -20,7 +20,7 @@
 
 本机已安装独立 Android Emulator（API 35 / ARM64，预览设备 `SYUCT_Preview_API35`），无需 Android Studio。工具位于用户目录 `.local/share/syuct-android-tools`；模拟设备数据位于 `.android/avd`，均不上传仓库。
 
-双击项目中的 **`预览化大课表.command`**：自动启动已配置模拟器、覆盖安装 `artifacts/SYUCT-Timetable-0.2.6-alpha1.apk` 并打开 App。也可在终端运行 `zsh ./预览化大课表.command`。该入口适用于这台已配置的 Mac；其他电脑需先安装 SDK 并创建同名设备。
+双击项目中的 **`预览化大课表.command`**：自动启动已配置模拟器、覆盖安装 `artifacts/SYUCT-Timetable-0.2.8-alpha1.apk` 并打开 App。也可在终端运行 `zsh ./预览化大课表.command`。该入口适用于这台已配置的 Mac；其他电脑需先安装 SDK 并创建同名设备。
 
 用鼠标点击、拖动模拟手机；关闭模拟器窗口即可停止运行，不会开机自启。预览设备中的 `DEMO` 是合成测试课表，不包含在 APK 中，导入自己的课表可替换。
 
@@ -71,7 +71,7 @@ tools/sign-release.mjs    本地签名工具（密钥目录必须在仓库外）
 
 ## 本地构建与测试
 
-使用 JDK 17、Android SDK 35 / Build Tools 35.0.0。Gradle Wrapper 固定 8.11.1，Android Gradle Plugin 固定 8.9.2。
+使用 JDK 17、Android SDK 36 / Build Tools 35.0.0。Gradle Wrapper 固定 8.11.1，Android Gradle Plugin 固定 8.9.2。
 
 ```sh
 # 配置 JAVA_HOME、ANDROID_HOME 指向本机已安装目录

@@ -22,6 +22,12 @@ public class MainActivity extends Activity {
     private android.content.SharedPreferences prefs;
     private final java.util.concurrent.atomic.AtomicBoolean checkingUpdate=new java.util.concurrent.atomic.AtomicBoolean();
     private volatile int availableUpdateCode;
+    private final Handler widgetFeedbackHandler=new Handler(Looper.getMainLooper());
+    private final Runnable widgetFeedback=()->showWidgetStatus();
+    private void showWidgetStatus(){
+        if(!ready||isFinishing()||isDestroyed())return;
+        web.evaluateJavascript("window.receiveWidgetPinStatus && window.receiveWidgetPinStatus("+JSONObject.quote(WidgetPinRequest.status(this))+")",null);
+    }
 
     private void updateResult(JSONObject result,int requestId){
         try{result.put("requestId",requestId);}catch(JSONException ignored){return;}
@@ -84,7 +90,7 @@ public class MainActivity extends Activity {
                 } catch (IOException e) { return blocked(); }
             }
             @Override public void onPageFinished(WebView v, String url) {
-                if (Policy.local(url)) { ready = true; deliver();offerReminders(); }
+                if (Policy.local(url)) { ready = true; deliver();offerReminders();showWidgetStatus(); }
             }
         });
         web.loadUrl(Policy.LOCAL + "index.html");
@@ -123,7 +129,7 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(request,permissions,results);
         if(request==31){if(results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED)requestReminderPermissions();else Toast.makeText(this,"未允许通知，上课提醒暂不可用。可在设置中开启。",Toast.LENGTH_LONG).show();}
     }
-    @Override protected void onResume(){super.onResume();refreshWidget();if(ready)web.evaluateJavascript("window.refreshClock()",null);}
+    @Override protected void onResume(){super.onResume();refreshWidget();if(ready)web.evaluateJavascript("window.refreshClock()",null);showWidgetStatus();}
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == SCHOOL && result == RESULT_OK) {
@@ -181,8 +187,24 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void backToDesktop(){runOnUiThread(()->{getIntent().removeExtra("fromWidget");moveTaskToBack(true);});}
         @JavascriptInterface public void reminderSettings(){runOnUiThread(()->{
             boolean enabled=CourseReminder.enabled(MainActivity.this);
+            LinearLayout content=new LinearLayout(MainActivity.this);content.setOrientation(LinearLayout.VERTICAL);
+            int padding=Math.round(24*getResources().getDisplayMetrics().density);content.setPadding(padding,padding/2,padding,padding/2);
+            TextView description=new TextView(MainActivity.this);description.setTextSize(16);
+            description.setText(CourseReminder.status(MainActivity.this)+"\n\n遵守单双周和开课周次；未设置开学日期或节次时间的课程不提醒。声音遵循手机静音、勿扰和通知设置。");
+            content.addView(description);
+            Button test=new Button(MainActivity.this);test.setText("发送测试通知");
+            test.setOnClickListener(v->Toast.makeText(MainActivity.this,CourseReminder.testNotification(MainActivity.this),Toast.LENGTH_LONG).show());content.addView(test);
+            Switch live=new Switch(MainActivity.this);live.setText("课前实时倒计时（试验）");live.setTextSize(16);
+            live.setChecked(LiveCourseNotice.enabled(MainActivity.this));live.setEnabled(LiveCourseNotice.supported());content.addView(live);
+            TextView liveStatus=new TextView(MainActivity.this);liveStatus.setTextSize(15);liveStatus.setText(LiveCourseNotice.status(MainActivity.this));content.addView(liveStatus);
+            live.setOnCheckedChangeListener((v,checked)->{LiveCourseNotice.enable(MainActivity.this,checked);liveStatus.setText(LiveCourseNotice.status(MainActivity.this));});
+            if(LiveCourseNotice.supported()){
+                Button preview=new Button(MainActivity.this);preview.setText("预览倒计时效果");
+                preview.setOnClickListener(v->Toast.makeText(MainActivity.this,LiveCourseNotice.preview(MainActivity.this),Toast.LENGTH_LONG).show());content.addView(preview);
+            }
+            ScrollView scroll=new ScrollView(MainActivity.this);scroll.addView(content);
             new AlertDialog.Builder(MainActivity.this).setTitle("上课提醒 · 提前15分钟")
-                .setMessage(CourseReminder.status(MainActivity.this)+"\n\n遵守单双周和开课周次；未设置开学日期或节次时间的课程不提醒。声音遵循手机静音、勿扰和通知设置。")
+                .setView(scroll)
                 .setNegativeButton("关闭窗口",null).setNeutralButton("权限与声音",(d,w)->{
                     if(!CourseReminder.notifications(MainActivity.this))requestReminderPermissions();else openReminderSystemSettings();
                 }).setPositiveButton(enabled?"关闭提醒":"开启提醒",(d,w)->{CourseReminder.enable(MainActivity.this,!enabled);if(!enabled)requestReminderPermissions();}).show();
@@ -202,9 +224,8 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public String defaultTimes(){return WidgetState.defaults(MainActivity.this);}
         @JavascriptInterface public void addWidget(){runOnUiThread(()->{
-            android.appwidget.AppWidgetManager manager=android.appwidget.AppWidgetManager.getInstance(MainActivity.this);
-            if(manager.isRequestPinAppWidgetSupported())manager.requestPinAppWidget(new ComponentName(MainActivity.this,TodayWidget.class),null,null);
-            else Toast.makeText(MainActivity.this,"长按桌面空白处，在小组件中选择「化大课表」",Toast.LENGTH_LONG).show();
+            WidgetPinRequest.request(MainActivity.this);showWidgetStatus();
+            widgetFeedbackHandler.removeCallbacks(widgetFeedback);widgetFeedbackHandler.postDelayed(widgetFeedback,10500);
         });}
         @JavascriptInterface public String load() { return prefs.getString("state", ""); }
         @JavascriptInterface public String save(String value) {
@@ -243,5 +264,5 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onBackPressed() { web.evaluateJavascript("window.goHome()", null); }
-    @Override protected void onDestroy() { web.removeJavascriptInterface("Native"); web.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() { widgetFeedbackHandler.removeCallbacks(widgetFeedback);web.removeJavascriptInterface("Native"); web.destroy(); super.onDestroy(); }
 }

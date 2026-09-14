@@ -302,7 +302,8 @@ $('confirmFirstWeek').onclick=()=>{
   try{const value=$('quickFirstWeek').value;if(!value)throw Error('请选择第一周的周一。');persist({...state,settings:{...state.settings,firstWeekDate:value}});$('firstWeekDialog').close();selectedWeek=Math.max(1,Math.min(state.settings.totalWeeks,C.currentWeek(state.settings)||1));renderHome();message('第一周日期已保存。');}
   catch(e){$('firstWeekError').textContent=e.message;}
 };
-$('addWidget').onclick=()=>bridge?.addWidget?bridge.addWidget():message('请长按安卓桌面空白处，在小组件中选择「化大课表」。');
+window.receiveWidgetPinStatus=text=>{const box=$('widgetPinStatus');box.textContent=String(text||'');box.hidden=!text;};
+$('addWidget').onclick=()=>{window.receiveWidgetPinStatus('正在请求桌面添加小组件…');if(bridge?.addWidget)bridge.addWidget();else window.receiveWidgetPinStatus('请到有空位的安卓桌面页，长按空白处，在小组件中选择「化大课表」。');$('widgetPinStatus').scrollIntoView({block:'nearest'});};
 $('reminderSettings').onclick=()=>bridge?.reminderSettings?bridge.reminderSettings():message('请在新版安卓 App 中设置上课提醒。');
 let updatePending=false,updateTimer,updateRequestId=0,updateAvailableCode=0;
 if(bridge?.appVersion)$('installedVersion').textContent='当前版本 '+bridge.appVersion();

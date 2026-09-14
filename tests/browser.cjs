@@ -101,6 +101,13 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>window.openOverview(true));await page.locator('.week-course').first().click();await page.evaluate(()=>window.goHome());assert.equal(await page.evaluate(()=>window.desktopReturns||0),0);await page.evaluate(()=>window.goHome());assert.equal(await page.evaluate(()=>window.desktopReturns),1);
   await page.evaluate(()=>window.openOverview(true));await page.locator('#closeOverview').click();assert.equal(await page.evaluate(()=>window.desktopReturns),2);await page.evaluate(()=>window.openOverview(false));await page.locator('#closeOverview').click();assert.equal(await page.locator('nav').isVisible(),true);count++;console.log('PASS 小组件来源返回桌面，详情先关闭；App内来源返回首页');
   await page.locator('nav [data-page="settings"]').click();await page.locator('#addWidget').click();assert.equal(await page.evaluate(()=>window.widgetRequested),true);count++;console.log('PASS 添加小组件入口调用原生方法');
+  assert.match(await page.locator('#widgetPinStatus').innerText(),/正在请求/);
+  const widgetSaved=await page.evaluate(()=>localStorage.getItem('test-state'));
+  for(const text of ['已向桌面发送请求，请在系统提示中确认。','尚未确认添加成功。请到有空位的桌面页长按添加。','当前桌面未允许直接添加。','已添加，请返回桌面查看。','<img src=x onerror=alert(1)>']){
+    await page.evaluate(value=>window.receiveWidgetPinStatus(value),text);assert.equal(await page.locator('#widgetPinStatus').innerText(),text);assert.equal(await page.locator('#widgetPinStatus img').count(),0);
+  }
+  assert.equal(await page.evaluate(()=>localStorage.getItem('test-state')),widgetSaved);
+  await page.evaluate(()=>window.receiveWidgetPinStatus(''));assert.equal(await page.locator('#widgetPinStatus').isVisible(),false);count++;console.log('PASS 小组件请求/未确认/不支持/成功均显示反馈，纯文本且不修改课表');
   await page.locator('#reminderSettings').click();assert.equal(await page.evaluate(()=>window.reminderRequested),true);count++;console.log('PASS 上课提醒入口调用原生权限与开关设置');
   assert.equal(await page.evaluate(()=>window.updateCalls||0),0);assert.match(await page.locator('#installedVersion').innerText(),/0.2.4-alpha1/);
   await page.clock.runFor(60000);assert.equal(await page.evaluate(()=>window.updateCalls||0),0);count++;console.log('PASS 启动、进入设置与停留均不自动检测更新');

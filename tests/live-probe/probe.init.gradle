@@ -1,0 +1,7 @@
+allprojects { afterEvaluate { p ->
+    if (p.plugins.hasPlugin('com.android.application')) {
+        p.android.buildTypes.debug.applicationIdSuffix = '.liveprobe'
+        p.android.sourceSets.debug.java.srcDir(p.rootProject.file('tests/live-probe'))
+        p.android.sourceSets.debug.manifest.srcFile(p.rootProject.file('tests/live-probe/AndroidManifest.xml'))
+    }
+} }

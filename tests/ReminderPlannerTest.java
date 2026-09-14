@@ -25,9 +25,28 @@ public class ReminderPlannerTest {
   check(ReminderPlanner.due(Collections.emptyList(),due,due,Set.of()).isEmpty());
   check(ReminderPlanner.events("2026-08-31",20,times,List.of(course("未知",1,11,"all"))).isEmpty());
   var afternoon=ReminderPlanner.events("2026-08-31",20,times,List.of(course("下午",1,5,"all")));check(afternoon.get(0).remind==at("2026-08-31T13:15:00"));
+  long reopen=at("2026-08-31T13:20:00"),start=at("2026-08-31T13:30:00");
+  check(ReminderPlanner.pending(afternoon,reopen,Set.of()).size()==1);
+  check(ReminderPlanner.pending(afternoon,at("2026-08-31T13:15:00"),Set.of()).size()==1);
+  check(ReminderPlanner.pending(afternoon,at("2026-08-31T13:14:59"),Set.of()).isEmpty());
+  check(ReminderPlanner.pending(afternoon,start,Set.of()).isEmpty());
+  check(ReminderPlanner.pending(afternoon,start+1,Set.of()).isEmpty());
+  var journal=Set.of(afternoon.get(0).key);
+  check(ReminderPlanner.pending(afternoon,reopen,journal).isEmpty());
+  check(ReminderPlanner.pending(afternoon,at("2026-08-31T13:29:59"),journal).isEmpty());
+  check(ReminderPlanner.next(afternoon,reopen,journal)==afternoon.get(1).remind);
+  check(ReminderPlanner.next(afternoon,afternoon.get(0).remind-1,journal)==afternoon.get(1).remind);
+  check(ReminderPlanner.pending(List.of(),reopen,Set.of()).isEmpty());
+  check(ReminderPlanner.pending(simultaneous,due,Set.of()).size()==2);
+  check(ReminderPlanner.pending(simultaneous,due,Set.of(simultaneous.get(0).key)).size()==1);
+  var mixed=new ArrayList<>(afternoon);mixed.addAll(events);
+  check(ReminderPlanner.pending(mixed,reopen,Set.of()).size()==1);
   c.first=2;c.last=17;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).size()==16);
   times[0]=new String[]{"08:20","08:50"};check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).get(0).remind==at("2026-09-07T08:05:00"));
   times[0]=new String[]{"00:10","00:50"};c.first=1;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).get(0).remind==at("2026-08-30T23:55:00"));
+  var midnight=ReminderPlanner.events("2026-08-31",20,times,List.of(c));
+  check(ReminderPlanner.pending(midnight,at("2026-08-31T00:05:00"),Set.of()).size()==1);
+  check(ReminderPlanner.pending(midnight,at("2026-08-31T00:05:00"),Set.of(midnight.get(0).key)).isEmpty());
   check(ReminderPlanner.events("2026-08-31",0,times,List.of(c)).isEmpty());
   System.out.println("PASS "+checks+" reminder planner checks");
  }
