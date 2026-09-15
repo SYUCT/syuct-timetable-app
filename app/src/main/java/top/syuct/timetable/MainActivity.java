@@ -14,6 +14,7 @@ import org.json.*;
 /** Only packaged UI has a bridge. The school WebView lives in a separate Activity. */
 public class MainActivity extends Activity {
     private WebView web;
+    private ReminderSettings reminderDialog;
     private String pending;
     private boolean ready;
     private boolean pendingOverview;
@@ -128,8 +129,9 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
         if(request==31){if(results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED)requestReminderPermissions();else Toast.makeText(this,"未允许通知，上课提醒暂不可用。可在设置中开启。",Toast.LENGTH_LONG).show();}
+        if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();
     }
-    @Override protected void onResume(){super.onResume();refreshWidget();if(ready)web.evaluateJavascript("window.refreshClock()",null);showWidgetStatus();}
+    @Override protected void onResume(){super.onResume();refreshWidget();if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();if(ready)web.evaluateJavascript("window.refreshClock()",null);showWidgetStatus();}
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == SCHOOL && result == RESULT_OK) {
@@ -186,28 +188,9 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void backToDesktop(){runOnUiThread(()->{getIntent().removeExtra("fromWidget");moveTaskToBack(true);});}
         @JavascriptInterface public void reminderSettings(){runOnUiThread(()->{
-            boolean enabled=CourseReminder.enabled(MainActivity.this);
-            LinearLayout content=new LinearLayout(MainActivity.this);content.setOrientation(LinearLayout.VERTICAL);
-            int padding=Math.round(24*getResources().getDisplayMetrics().density);content.setPadding(padding,padding/2,padding,padding/2);
-            TextView description=new TextView(MainActivity.this);description.setTextSize(16);
-            description.setText(CourseReminder.status(MainActivity.this)+"\n\n遵守单双周和开课周次；未设置开学日期或节次时间的课程不提醒。声音遵循手机静音、勿扰和通知设置。");
-            content.addView(description);
-            Button test=new Button(MainActivity.this);test.setText("发送测试通知");
-            test.setOnClickListener(v->Toast.makeText(MainActivity.this,CourseReminder.testNotification(MainActivity.this),Toast.LENGTH_LONG).show());content.addView(test);
-            Switch live=new Switch(MainActivity.this);live.setText("课前实时倒计时（试验）");live.setTextSize(16);
-            live.setChecked(LiveCourseNotice.enabled(MainActivity.this));live.setEnabled(LiveCourseNotice.supported());content.addView(live);
-            TextView liveStatus=new TextView(MainActivity.this);liveStatus.setTextSize(15);liveStatus.setText(LiveCourseNotice.status(MainActivity.this));content.addView(liveStatus);
-            live.setOnCheckedChangeListener((v,checked)->{LiveCourseNotice.enable(MainActivity.this,checked);liveStatus.setText(LiveCourseNotice.status(MainActivity.this));});
-            if(LiveCourseNotice.supported()){
-                Button preview=new Button(MainActivity.this);preview.setText("预览倒计时效果");
-                preview.setOnClickListener(v->Toast.makeText(MainActivity.this,LiveCourseNotice.preview(MainActivity.this),Toast.LENGTH_LONG).show());content.addView(preview);
-            }
-            ScrollView scroll=new ScrollView(MainActivity.this);scroll.addView(content);
-            new AlertDialog.Builder(MainActivity.this).setTitle("上课提醒 · 提前15分钟")
-                .setView(scroll)
-                .setNegativeButton("关闭窗口",null).setNeutralButton("权限与声音",(d,w)->{
-                    if(!CourseReminder.notifications(MainActivity.this))requestReminderPermissions();else openReminderSystemSettings();
-                }).setPositiveButton(enabled?"关闭提醒":"开启提醒",(d,w)->{CourseReminder.enable(MainActivity.this,!enabled);if(!enabled)requestReminderPermissions();}).show();
+            if(reminderDialog!=null&&reminderDialog.isShowing())return;
+            reminderDialog=new ReminderSettings(MainActivity.this,()->requestReminderPermissions(),()->openReminderSystemSettings());
+            reminderDialog.show();
         });}
         @JavascriptInterface public void community(String target) {
             if(!"github".equals(target)&&!"website".equals(target)&&!"group".equals(target))return;

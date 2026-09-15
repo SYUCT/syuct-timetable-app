@@ -1,0 +1,7 @@
+allprojects { afterEvaluate { p ->
+    if (p.plugins.hasPlugin('com.android.application')) {
+        p.android.buildTypes.debug.applicationIdSuffix = '.exactprobe'
+        p.android.sourceSets.debug.java.srcDir(p.rootProject.file('tests/exact-probe'))
+        p.android.sourceSets.debug.manifest.srcFile(p.rootProject.file('tests/exact-probe/AndroidManifest.xml'))
+    }
+} }

@@ -6,8 +6,8 @@ android {
         applicationId 'top.syuct.timetable'
         minSdk 26
         targetSdk 35
-        versionCode 11
-        versionName '0.2.9-alpha1'
+        versionCode 12
+        versionName '0.2.10-alpha1'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { release { minifyEnabled false } }

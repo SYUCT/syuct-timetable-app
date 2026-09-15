@@ -68,14 +68,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         if(!CourseReminder.notifications(c))return "请先允许通知，再预览倒计时。";
         if(!enabled(c))return "请先开启课前实时倒计时。";
         long now=System.currentTimeMillis(),start=now+180000;
-        Intent open=new Intent(c,MainActivity.class).setAction(TodayWidget.OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi=PendingIntent.getActivity(c,173,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder builder=new Notification.Builder(c,CourseReminder.CHANNEL)
-            .setContentTitle("课前预览").setContentText(CourseNoticeStyle.time(start)+" 开课 · 示例教室")
-            .setStyle(new Notification.BigTextStyle().setBigContentTitle("课前提醒 · 预览")
-                .bigText(CourseNoticeStyle.details(start,"示例教室")+"\n仅作效果预览，3分钟后结束。"))
-            .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
-            .setTimeoutAfter(180000);
+        Notification.Builder builder=NoticePreview.sample(c).builder(c,start,true);
         try{
             c.getSystemService(NotificationManager.class).notify(PREVIEW,153,build(c,builder,PREVIEW,153,start,now));
             return available(c)?"已发送3分钟预览，请查看状态栏或锁屏；系统决定是否上岛。":"已发送普通通知预览，当前系统未允许实时显示。";

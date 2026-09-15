@@ -51,7 +51,7 @@ public final class CourseReminder extends BroadcastReceiver {
         SharedPreferences p=prefs(c);
         if(!enabled(c)||!notifications(c)){
             if(previous!=null)manager.cancel(previous);
-            p.edit().remove("scheduledAt").remove("scheduleError").apply();return;
+            p.edit().remove("scheduledAt").remove("scheduledExact").remove("scheduleError").apply();return;
         }
         List<ReminderPlanner.Event> all=events(c);
         LiveCourseNotice.reconcile(c,all,now);
@@ -60,13 +60,15 @@ public final class CourseReminder extends BroadcastReceiver {
         // Opening/saving/rebooting during the reminder window must not drop an unsent class.
         firePending(c,all,now,sent);
         long next=ReminderPlanner.next(all,now,sent);
-        if(!force&&next>0&&previous!=null&&p.getLong("scheduledAt",0)==next)return;
+        boolean exact=ExactReminder.active(c);
+        if(!force&&next>0&&previous!=null&&p.getLong("scheduledAt",0)==next&&p.getBoolean("scheduledExact",false)==exact)return;
         if(previous!=null)manager.cancel(previous);
-        p.edit().remove("scheduledAt").remove("scheduleError").apply();
+        p.edit().remove("scheduledAt").remove("scheduledExact").remove("scheduleError").apply();
         if(next==0)return;
         try{
-            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,next,alarm(c,next));
-            p.edit().putLong("scheduledAt",next).apply();
+            boolean reservedExact=ExactReminder.reserve(manager,next,alarm(c,next),exact);
+            p.edit().putLong("scheduledAt",next).putBoolean("scheduledExact",reservedExact).apply();
+            if(exact&&!reservedExact)p.edit().putString("scheduleError","精确定时权限发生变化，已改用普通提醒；请重新检查授权。").apply();
         }catch(RuntimeException e){p.edit().putString("scheduleError","预约失败，请重新打开 App 或检查系统后台限制。").apply();}
     }
     private static Set<String> sent(Context c,long now){
@@ -86,11 +88,11 @@ public final class CourseReminder extends BroadcastReceiver {
         for(ReminderPlanner.Event e:all)if(e.remind==next){plan+="\n"+e.course.name;break;}
         if(!ReminderPlanner.pending(all,now,sent(c,now)).isEmpty())plan="当前有待发送的课前提醒。\n"+plan;
         String error=prefs(c).getString("scheduleError",prefs(c).getString("deliveryError",""));
-        return "已开启。"+plan+"\n普通通知可能受系统省电限制而延迟；上课后不补发。"+(error.isEmpty()?"":"\n"+error);
+        return "已开启。"+plan+"\n"+ExactReminder.status(c)+"。上课后不补发。"+(error.isEmpty()?"":"\n"+error);
     }
     @Override public void onReceive(Context context,Intent intent){
         Context c=context.getApplicationContext();String action=intent.getAction();
-        if(FIRE.equals(action)||Intent.ACTION_BOOT_COMPLETED.equals(action)||Intent.ACTION_TIME_CHANGED.equals(action)||Intent.ACTION_TIMEZONE_CHANGED.equals(action)||Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)){
+        if(FIRE.equals(action)||Intent.ACTION_BOOT_COMPLETED.equals(action)||Intent.ACTION_TIME_CHANGED.equals(action)||Intent.ACTION_TIMEZONE_CHANGED.equals(action)||Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)||AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED.equals(action)){
             schedule(c,System.currentTimeMillis(),true);
             TodayWidget.refreshAll(c);
         }
@@ -123,11 +125,10 @@ public final class CourseReminder extends BroadcastReceiver {
     static String testNotification(Context c){
         if(!notifications(c))return "未允许通知，请点「权限与声音」开启。";
         try{
-            Notification notice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL))
-                .setContentTitle("化大课表 · 测试通知").setContentText("通知已发出。声音遵循手机静音、勿扰和通知设置。")
-                .setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER).setTimeoutAfter(60000).build();
+            Notification notice=CourseNoticeStyle.apply(c,NoticePreview.sample(c).builder(c,System.currentTimeMillis(),false))
+                .setCategory(Notification.CATEGORY_REMINDER).build();
             c.getSystemService(NotificationManager.class).notify("reminder_test",152,notice);
-            return "测试通知已发送，请下拉通知栏查看。这不代表后台提醒一定准时。";
+            return "通知预览已发送，请下拉通知栏查看。这不代表后台提醒一定准时。";
         }catch(RuntimeException e){return "测试通知发送失败，请检查系统通知设置。";}
     }
 }
