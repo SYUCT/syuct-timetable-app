@@ -101,11 +101,12 @@ public final class CourseReminder extends BroadcastReceiver {
         for(ReminderPlanner.Event e:ReminderPlanner.pending(all,now,sent)){
             Intent open=new Intent(c,MainActivity.class).setAction(TodayWidget.OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent pi=PendingIntent.getActivity(c,170,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-            String time=Instant.ofEpochMilli(e.start).atZone(LessonClock.ZONE).toLocalTime().toString();
+            String time=CourseNoticeStyle.time(e.start);
             String body=time+" 开课 · "+(e.course.room.isEmpty()?"地点待定":e.course.room);
-            Notification publicNotice=new Notification.Builder(c,CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
-            Notification.Builder builder=new Notification.Builder(c,CHANNEL).setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle(e.course.name).setContentText(body).setStyle(new Notification.BigTextStyle().bigText(body))
+            Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
+            Notification.Builder builder=new Notification.Builder(c,CHANNEL)
+                .setContentTitle(CourseNoticeStyle.title(e.course.name)).setContentText(body)
+                .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(CourseNoticeStyle.details(e.start,e.course.room)))
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
                 .setTimeoutAfter(e.start-now);
@@ -122,7 +123,7 @@ public final class CourseReminder extends BroadcastReceiver {
     static String testNotification(Context c){
         if(!notifications(c))return "未允许通知，请点「权限与声音」开启。";
         try{
-            Notification notice=new Notification.Builder(c,CHANNEL).setSmallIcon(R.drawable.ic_notification)
+            Notification notice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL))
                 .setContentTitle("化大课表 · 测试通知").setContentText("通知已发出。声音遵循手机静音、勿扰和通知设置。")
                 .setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER).setTimeoutAfter(60000).build();
             c.getSystemService(NotificationManager.class).notify("reminder_test",152,notice);

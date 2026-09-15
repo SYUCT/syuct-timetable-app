@@ -27,6 +27,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         return available(c)?"已开启。是否上岛及展示样式由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
     }
     static Notification build(Context c,Notification.Builder builder,String key,int id,long start,long now){
+        CourseNoticeStyle.apply(c,builder);
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
         if(Build.VERSION.SDK_INT<36||!available(c))return builder.build();
         PendingIntent end=PendingIntent.getBroadcast(c,id,new Intent(c,LiveCourseNotice.class)
@@ -35,14 +36,14 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         // Official extras contract also works with compileSdk 36. The native setter
         // was only exposed in SDK 36.1; do not invoke it on base Android 16.
         android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",true);
-        builder.addExtras(extras).setOngoing(true)
+        builder.addExtras(extras).setOngoing(true).setShortCriticalText(CourseNoticeStyle.time(start))
             .setWhen(start).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
             .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end)
-            .addAction(new Notification.Action.Builder(null,"结束倒计时",end).build());
+            .addAction(new Notification.Action.Builder(null,"结束提醒",end).build());
         Notification notice=builder.build();
         if(!notice.hasPromotableCharacteristics()){
             extras.putBoolean("android.requestPromotedOngoing",false);
-            return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false)
+            return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false).setShortCriticalText(null)
                 .setDeleteIntent(null).setActions(new Notification.Action[0]).build();
         }
         return notice;
@@ -69,9 +70,10 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         long now=System.currentTimeMillis(),start=now+180000;
         Intent open=new Intent(c,MainActivity.class).setAction(TodayWidget.OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi=PendingIntent.getActivity(c,173,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder builder=new Notification.Builder(c,CourseReminder.CHANNEL).setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("课前倒计时 · 效果预览").setContentText("示例课程 · 3分钟后自动结束")
-            .setStyle(new Notification.BigTextStyle().bigText("示例课程 · 示例教室\n点击打开课表，或结束本次倒计时。"))
+        Notification.Builder builder=new Notification.Builder(c,CourseReminder.CHANNEL)
+            .setContentTitle("课前预览").setContentText(CourseNoticeStyle.time(start)+" 开课 · 示例教室")
+            .setStyle(new Notification.BigTextStyle().setBigContentTitle("课前提醒 · 预览")
+                .bigText(CourseNoticeStyle.details(start,"示例教室")+"\n仅作效果预览，3分钟后结束。"))
             .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setTimeoutAfter(180000);
         try{

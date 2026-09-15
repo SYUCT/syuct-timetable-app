@@ -21,6 +21,30 @@ public final class NativeLiveProbe extends Activity {
         TextView report=new TextView(this);report.setTextSize(20);report.setPadding(24,80,24,24);setContentView(report);
         manager().cancelAll();CourseReminder.prefs(this).edit().clear().commit();
         CourseReminder.channel(this);
+        Notification branded=CourseNoticeStyle.apply(this,base()).build();
+        check(branded.color==CourseNoticeStyle.BLUE,"brand blue");
+        check(!branded.extras.getBoolean(Notification.EXTRA_COLORIZED),"not colorized for promotion");
+        check(branded.getLargeIcon()!=null,"full color crest available");
+        android.graphics.drawable.Drawable icon=branded.getSmallIcon().loadDrawable(this);
+        android.graphics.Bitmap mask=android.graphics.Bitmap.createBitmap(96,96,android.graphics.Bitmap.Config.ARGB_8888);
+        icon.setBounds(0,0,96,96);icon.draw(new android.graphics.Canvas(mask));
+        int transparent=0,opaque=0;
+        for(int y=0;y<96;y++)for(int x=0;x<96;x++){int a=android.graphics.Color.alpha(mask.getPixel(x,y));if(a==0)transparent++;if(a>200)opaque++;}
+        check(transparent>100&&opaque>100,"small crest retains transparent and visible detail");
+        check(CourseNoticeStyle.title("  测试课程  ").equals("测试课程"),"trim title");
+        check(CourseNoticeStyle.title("").equals("即将上课"),"empty title");
+        check(CourseNoticeStyle.title("新时代中国特色社会主义理论与实践").codePointCount(0,8)==8,"compact long title");
+        check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
+        check(CourseNoticeStyle.details(0,"").equals("开课时间：08:00\n课程地点：待定"),"separate details without invented room");
+        if(getIntent().getBooleanExtra("visual",false)){
+            long now=System.currentTimeMillis();
+            Notification.Builder visual=new Notification.Builder(this,CourseReminder.CHANNEL).setContentTitle("课前预览")
+                .setContentText(CourseNoticeStyle.time(now+180000)+" 开课 · 瑞师楼222")
+                .setStyle(new Notification.BigTextStyle().setBigContentTitle("课前提醒 · 预览")
+                    .bigText(CourseNoticeStyle.details(now+180000,"瑞师楼222")+"\n仅作效果预览，3分钟后结束。"));
+            LiveCourseNotice.enable(this,true);manager().notify("visual",153,LiveCourseNotice.build(this,visual,"visual",153,now+180000,now));
+            report.setText("PASS "+checks+" style visual");android.util.Log.i("NativeLiveProbe","PASS "+checks+" style visual");return;
+        }
         boolean denied=getIntent().getBooleanExtra("denied",false);
         if(denied){
             check(!CourseReminder.notifications(this),"notifications denied");
@@ -40,6 +64,7 @@ public final class NativeLiveProbe extends Activity {
             check(ongoing(live),"ongoing requested");
             check(live.hasPromotableCharacteristics(),"eligible notification characteristics");
             check(live.when==start,"system countdown target");
+            check(CourseNoticeStyle.time(start).equals(live.extras.getString("android.shortCriticalText")),"compact start time");
             check(live.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER),"system chronometer");
             check(live.deleteIntent!=null,"dismissal callback");
             check(live.actions.length==1,"explicit end action");
