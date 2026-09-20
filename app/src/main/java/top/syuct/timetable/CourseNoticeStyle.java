@@ -19,11 +19,12 @@ final class CourseNoticeStyle {
         Bitmap source=BitmapFactory.decodeResource(context.getResources(),R.drawable.campus_badge);
         Bitmap scaled=Bitmap.createScaledBitmap(source,96,96,true);
         int[] pixels=new int[96*96];scaled.getPixels(pixels,0,96,0,0,96,96);
-        // Small notification icons are alpha masks: a full-colour opaque image would
-        // become a white disc. Retain the badge's dark artwork as a monochrome stencil.
+        // System small icons are alpha masks, not colour images. Preserve the white
+        // paper/ring as the foreground instead of inverting the dark artwork.
+        // Full-colour OEM templates must use badgeIcon(), never this fallback mask.
         for(int i=0;i<pixels.length;i++){
             int p=pixels[i],luma=(Color.red(p)*54+Color.green(p)*183+Color.blue(p)*19)/256;
-            int strength=Math.max(0,Math.min(255,(215-luma)*3));
+            int strength=Math.max(0,Math.min(255,(luma-40)*255/200));
             pixels[i]=Color.argb(Color.alpha(p)*strength/255,255,255,255);
         }
         Bitmap mask=Bitmap.createBitmap(pixels,96,96,Bitmap.Config.ARGB_8888);
@@ -31,12 +32,18 @@ final class CourseNoticeStyle {
         if(scaled!=source)scaled.recycle();source.recycle();
         return small;
     }
+    static Icon badgeIcon(Context context){return Icon.createWithResource(context,R.drawable.campus_badge);}
     static Notification.Builder apply(Context context,Notification.Builder builder){
         return builder.setSmallIcon(smallIcon(context))
-            .setLargeIcon(Icon.createWithResource(context,R.drawable.campus_badge))
+            .setLargeIcon(badgeIcon(context))
             .setColor(BLUE).setColorized(false);
     }
     static String time(long start){return Instant.ofEpochMilli(start).atZone(LessonClock.ZONE).format(DateTimeFormatter.ofPattern("HH:mm"));}
+    static String compactTitle(String name){
+        String text=name==null?"":name.replaceAll("\\s+","").trim();
+        if(text.isEmpty())return "待上课";
+        return text.substring(0,text.offsetByCodePoints(0,Math.min(3,text.codePointCount(0,text.length()))));
+    }
     static String title(String name){
         String text=name==null?"":name.replaceAll("\\s+"," ").trim();
         if(text.isEmpty())return "即将上课";

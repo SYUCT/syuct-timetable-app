@@ -112,7 +112,7 @@ public final class CourseReminder extends BroadcastReceiver {
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
                 .setTimeoutAfter(e.start-now);
-            Notification notice=LiveCourseNotice.build(c,builder,e.key,151,e.start,now);
+            Notification notice=LiveCourseNotice.build(c,builder,e.course.name,e.key,151,e.start,now);
             try{
                 c.getSystemService(NotificationManager.class).notify(e.key,151,notice);sent.add(e.key);
                 // Persist each event before the next one; stable tags also prevent duplicate entries.

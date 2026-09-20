@@ -68,6 +68,7 @@ final class ReminderSettings extends Dialog {
         LinearLayout island=card(content);live=toggle("课前实时倒计时");island.addView(live);
         add(island,text("试验功能 · 展示样式由手机系统决定",12,BLUE,false),4);
         liveStatus=text("",14,MUTED,false);add(island,liveStatus,6);
+        add(island,text("小米左右分区：校徽＋课程前三字在左，开课时间在右；展开查看完整课程。此模板不支持滚动。vivo/iQOO 尝试相似布局；通用通知图标仍由系统染色。",13,MUTED,false),8);
         LinearLayout preview=card(content);preview.addView(text("看看提醒长什么样",18,INK,true));
         NoticePreview sample=NoticePreview.sample(activity);
         add(preview,text(sample.source(),13,MUTED,false),8);

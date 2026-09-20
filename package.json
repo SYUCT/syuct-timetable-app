@@ -1,7 +1,7 @@
 {
   "name": "syuct-timetable-app-tests",
   "private": true,
-  "version": "0.2.10-alpha1",
+  "version": "0.2.11-alpha1",
   "scripts": {
     "test": "node --test tests/core.test.cjs",
     "test:browser": "node tests/browser.cjs"

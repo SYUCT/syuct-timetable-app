@@ -24,24 +24,37 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static String status(Context c){
         if(!supported())return "当前系统不支持 Android 16 实时通知，仍使用普通提醒。";
         if(!enabled(c))return "开启后，课前15分钟尝试显示系统倒计时；上课或关闭后结束。";
+        if(XiaomiIsland.attempt(c))return "已尝试小米左右分区：校徽与课程在左、时间在右。需系统允许焦点通知；不支持时保留通用提醒。";
+        if(VivoIsland.device())return "已开启 vivo 原子岛实验兼容；是否显示取决于系统版本和接入权限，不支持时保留普通通知。";
         return available(c)?"已开启。是否上岛及展示样式由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
     }
-    static Notification build(Context c,Notification.Builder builder,String key,int id,long start,long now){
+    static Notification build(Context c,Notification.Builder builder,String name,String key,int id,long start,long now){
         CourseNoticeStyle.apply(c,builder);
+        boolean vivo=VivoIsland.attempt(c);
+        boolean xiaomi=XiaomiIsland.attempt(c);
+        if(vivo)builder.addExtras(VivoIsland.extras(c,name,start,builder.build().contentIntent));
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
-        if(Build.VERSION.SDK_INT<36||!available(c))return builder.build();
+        if(Build.VERSION.SDK_INT<36||(!available(c)&&!vivo&&!xiaomi))return builder.build();
         PendingIntent end=PendingIntent.getBroadcast(c,id,new Intent(c,LiveCourseNotice.class)
-            .setAction(END).setData(Uri.parse("syuct-live://end/"+Uri.encode(key)))
+            .setAction(END).addFlags(Intent.FLAG_RECEIVER_FOREGROUND).setData(Uri.parse("syuct-live://end/"+Uri.encode(key)))
             .putExtra("key",key).putExtra("id",id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
+        if(xiaomi){
+            try{builder.addExtras(XiaomiIsland.extras(c,name,builder.build(),start,now,endAction));}
+            catch(org.json.JSONException|RuntimeException e){xiaomi=false;}
+        }
         // Official extras contract also works with compileSdk 36. The native setter
         // was only exposed in SDK 36.1; do not invoke it on base Android 16.
         android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",true);
-        builder.addExtras(extras).setOngoing(true).setShortCriticalText(CourseNoticeStyle.time(start))
+        // Xiaomi's OEM payload owns two regions. If unavailable, keep the time in
+        // the standard one-slot chip rather than replacing it with the course name.
+        builder.addExtras(extras).setOngoing(available(c)).setShortCriticalText(
+                XiaomiIsland.device()?CourseNoticeStyle.time(start):CourseNoticeStyle.compactTitle(name))
             .setWhen(start).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
             .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end)
-            .addAction(new Notification.Action.Builder(null,"结束提醒",end).build());
+            .addAction(endAction);
         Notification notice=builder.build();
-        if(!notice.hasPromotableCharacteristics()){
+        if(!notice.hasPromotableCharacteristics()&&!vivo&&!xiaomi){
             extras.putBoolean("android.requestPromotedOngoing",false);
             return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false).setShortCriticalText(null)
                 .setDeleteIntent(null).setActions(new Notification.Action[0]).build();
@@ -51,8 +64,8 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static void cancelLive(Context c){
         NotificationManager manager=c.getSystemService(NotificationManager.class);
         for(StatusBarNotification n:manager.getActiveNotifications())
-            if((n.getId()==151||PREVIEW.equals(n.getTag()))&&(n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0)
-                manager.cancel(n.getTag(),n.getId());
+            if((n.getId()==151||PREVIEW.equals(n.getTag()))&&((n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0||VivoIsland.hasPayload(n.getNotification())||XiaomiIsland.hasPayload(n.getNotification())))
+                VivoIsland.cancel(c,n.getTag(),n.getId());
     }
     static void reconcile(Context c,List<ReminderPlanner.Event> events,long now){
         NotificationManager manager=c.getSystemService(NotificationManager.class);
@@ -60,7 +73,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             if(n.getId()!=151)continue;
             boolean current=false;
             for(ReminderPlanner.Event e:events)if(e.key.equals(n.getTag())&&e.start>now){current=true;break;}
-            if(!current)manager.cancel(n.getTag(),n.getId());
+            if(!current)VivoIsland.cancel(c,n.getTag(),n.getId());
         }
     }
     @android.annotation.SuppressLint("MissingPermission")
@@ -68,9 +81,12 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         if(!CourseReminder.notifications(c))return "请先允许通知，再预览倒计时。";
         if(!enabled(c))return "请先开启课前实时倒计时。";
         long now=System.currentTimeMillis(),start=now+180000;
-        Notification.Builder builder=NoticePreview.sample(c).builder(c,start,true);
+        NoticePreview sample=NoticePreview.sample(c);
+        Notification.Builder builder=sample.builder(c,start,true);
         try{
-            c.getSystemService(NotificationManager.class).notify(PREVIEW,153,build(c,builder,PREVIEW,153,start,now));
+            c.getSystemService(NotificationManager.class).notify(PREVIEW,153,build(c,builder,sample.name,PREVIEW,153,start,now));
+            if(XiaomiIsland.attempt(c))return "已发送小米左右分区预览；焦点通知权限和系统版本决定实际显示。";
+            if(VivoIsland.attempt(c))return "已发送3分钟原子岛兼容预览；是否上岛由 vivo 系统决定。";
             return available(c)?"已发送3分钟预览，请查看状态栏或锁屏；系统决定是否上岛。":"已发送普通通知预览，当前系统未允许实时显示。";
         }catch(RuntimeException e){return "预览未能发送，请检查系统通知设置。";}
     }
@@ -79,6 +95,6 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         String key=intent.getStringExtra("key");int id=intent.getIntExtra("id",0);
         if(key==null||key.length()>2000||!(id==151||id==153&&PREVIEW.equals(key)))return;
         // CourseReminder's durable sent journal already prevents re-posting after dismissal.
-        c.getSystemService(NotificationManager.class).cancel(key,id);
+        VivoIsland.cancel(c,key,id);
     }
 }
