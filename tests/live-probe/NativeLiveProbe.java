@@ -113,13 +113,14 @@ public final class NativeLiveProbe extends Activity {
             Bundle decoded=parcel.readBundle(getClassLoader());parcel.recycle();
             check(decoded.getString(XiaomiIsland.PARAM).contains("数值分"),"payload survives notification IPC");
             if(Build.VERSION.SDK_INT>=36){
-                Notification nativeNotice=LiveCourseNotice.nativeNotice(base().addExtras(payload),action,stop,180000,0);
-                check(!nativeNotice.extras.getBoolean("android.requestPromotedOngoing"),"native route does not also request generic promotion");
-                check(nativeNotice.extras.getString("android.shortCriticalText")==null,"native route has no conflicting chip text");
-                check(XiaomiIsland.hasPayload(nativeNotice),"native route retains OEM payload");
-                check(nativeNotice.deleteIntent!=null&&nativeNotice.actions.length==1,"native route retains end action");
-                check(nativeNotice.getTimeoutAfter()==180000,"native route expires at start");
-                check(!ongoing(nativeNotice),"native fallback remains dismissible");
+                Notification restored=LiveCourseNotice.liveState(base().addExtras(payload),"数值分 08:00",action,stop,180000,0,true).build();
+                check(restored.extras.getBoolean("android.requestPromotedOngoing"),"regression: preserve generic promotion request");
+                check("数值分 08:00".equals(restored.extras.getString("android.shortCriticalText")),"regression: preserve name AND time");
+                check(!XiaomiIsland.hasPayload(restored),"unverified OEM template cannot hijack standard route");
+                check(restored.deleteIntent!=null&&restored.actions.length==1,"restored route retains end action");
+                check(restored.getTimeoutAfter()==180000,"restored route expires at start");
+                check(ongoing(restored),"regression: ongoing NOT cleared on granted focus permission");
+                check(!ongoing(LiveCourseNotice.liveState(base(),"数值分",action,stop,180000,0,false).build()),"generic permission denial still respected");
             }
         }catch(org.json.JSONException e){throw new AssertionError(e);}
         if(getIntent().getBooleanExtra("visual",false)){
@@ -147,7 +148,7 @@ public final class NativeLiveProbe extends Activity {
         LiveCourseNotice.enable(this,true);check(LiveCourseNotice.enabled(this),"opt in saved");
         Notification live=LiveCourseNotice.build(this,base(),"数值分析","qa",151,start,now);
         if(!VivoIsland.device())check(!VivoIsland.hasPayload(live),"generic phone has no vendor extras");
-        if(!XiaomiIsland.device())check(!XiaomiIsland.hasPayload(live),"generic phone has no Xiaomi extras");
+        check(!XiaomiIsland.hasPayload(live),"no phone automatically selects unverified Xiaomi template");
         if(Build.VERSION.SDK_INT>=36&&LiveCourseNotice.available(this)){
             check(ongoing(live),"ongoing requested");
             check(live.hasPromotableCharacteristics(),"eligible notification characteristics");

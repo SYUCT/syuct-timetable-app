@@ -8,7 +8,7 @@ import android.provider.Settings;
 import org.json.*;
 import java.util.Locale;
 
-/** HyperOS 3 official image/text-left + text-right template. No media impersonation. */
+/** HyperOS template helpers retained for isolated tests; NOT selected for real notices. */
 final class XiaomiIsland {
     static final String PARAM="miui.focus.param", BADGE="miui.focus.pic_syuct_badge", END="miui.focus.action_end";
     static final int UNKNOWN=-1, DENIED=0, GRANTED=1;
@@ -53,10 +53,8 @@ final class XiaomiIsland {
     }
     static boolean nativeAllowed(int protocol,int permission){return protocol>=3&&permission==GRANTED;}
     static String status(int protocol,int permission){
-        if(protocol<3)return "未检测到小米超级岛专用接口。使用通用通知，课程简称与开课时间在同一短文本中，可能被系统截短。";
-        if(permission==DENIED)return "系统返回：未允许本应用的焦点通知。当前使用通用通知，不能保证左右分区和彩色校徽；可能需要系统授权或小米接入资格。";
-        if(permission==UNKNOWN)return "暂未取得焦点通知权限结果，先使用通用通知；不会把发送成功当作左右模板已生效。";
-        return "系统已允许焦点通知，将使用左侧校徽与课程、右侧时间的专用模板。实际呈现仍由系统决定。";
+        String info=protocol<3?"未检测到专用接口。":permission==DENIED?"系统未允许焦点通知。":permission==UNKNOWN?"暂未取得焦点通知权限结果。":"系统已允许焦点通知，但这不代表专用模板已适配。";
+        return info+"本版统一使用通用实时通知，不因焦点权限关闭倒计时。是否上岛仍由系统决定。";
     }
     static boolean attempt(Context c){
         if(Build.VERSION.SDK_INT<36||!device()||!LiveCourseNotice.enabled(c))return false;

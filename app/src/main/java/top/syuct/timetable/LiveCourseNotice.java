@@ -31,57 +31,44 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static Notification build(Context c,Notification.Builder builder,String name,String key,int id,long start,long now){
         CourseNoticeStyle.apply(c,builder);
         boolean vivo=VivoIsland.attempt(c);
-        boolean xiaomi=XiaomiIsland.attempt(c);
+        // Focus permission is NOT evidence that our OEM template renders. Keep
+        // Xiaomi on the working standard live path until native UI is verified.
         if(vivo)builder.addExtras(VivoIsland.extras(c,name,start,builder.build().contentIntent));
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
-        if(Build.VERSION.SDK_INT<36||(!available(c)&&!vivo&&!xiaomi))return builder.build();
+        if(Build.VERSION.SDK_INT<36||(!available(c)&&!vivo))return builder.build();
         PendingIntent end=PendingIntent.getBroadcast(c,id,new Intent(c,LiveCourseNotice.class)
             .setAction(END).addFlags(Intent.FLAG_RECEIVER_FOREGROUND).setData(Uri.parse("syuct-live://end/"+Uri.encode(key)))
             .putExtra("key",key).putExtra("id",id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
-        if(xiaomi){
-            try{
-                builder.addExtras(XiaomiIsland.extras(c,name,builder.build(),start,now,endAction));
-                return nativeNotice(builder,endAction,end,start,now);
-            }
-            catch(org.json.JSONException|RuntimeException e){
-                xiaomi=false;
-                builder.getExtras().remove(XiaomiIsland.PARAM);
-                builder.getExtras().remove("miui.focus.pics");
-                builder.getExtras().remove("miui.focus.actions");
-            }
-        }
-        // Official extras contract also works with compileSdk 36. The native setter
-        // was only exposed in SDK 36.1; do not invoke it on base Android 16.
-        android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",true);
         // Fallback is one short text slot, NOT two OEM regions. Retain both pieces
         // of information; the system may truncate this on narrow devices.
-        builder.addExtras(extras).setOngoing(available(c)).setShortCriticalText(
-                XiaomiIsland.device()?CourseNoticeStyle.fallbackChip(name,start):CourseNoticeStyle.compactTitle(name))
-            .setWhen(start).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-            .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end)
-            .addAction(endAction);
+        liveState(builder,XiaomiIsland.device()?CourseNoticeStyle.fallbackChip(name,start):CourseNoticeStyle.compactTitle(name),
+            endAction,end,start,now,available(c));
         Notification notice=builder.build();
-        if(!notice.hasPromotableCharacteristics()&&!vivo&&!xiaomi){
+        if(!notice.hasPromotableCharacteristics()&&!vivo){
+            android.os.Bundle extras=new android.os.Bundle();
             extras.putBoolean("android.requestPromotedOngoing",false);
             return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false).setShortCriticalText(null)
                 .setDeleteIntent(null).setActions(new Notification.Action[0]).build();
         }
         return notice;
     }
-    static Notification nativeNotice(Notification.Builder builder,Notification.Action action,PendingIntent end,long start,long now){
-        android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",false);
-        // One renderer at a time: don't ask Android's generic chip to override
-        // the permitted Xiaomi focus template. OEM updatable controls its life.
-        builder.getExtras().remove("android.shortCriticalText");
-        return builder.addExtras(extras).setOngoing(false)
+    static Notification.Builder liveState(Notification.Builder builder,String chip,Notification.Action action,PendingIntent end,long start,long now,boolean promoted){
+        if(Build.VERSION.SDK_INT<36)return builder;
+        // No unverified Xiaomi template can suppress the standard live state.
+        builder.getExtras().remove(XiaomiIsland.PARAM);
+        builder.getExtras().remove("miui.focus.pics");
+        builder.getExtras().remove("miui.focus.actions");
+        // compileSdk 36 extras contract; the native setter is only in SDK 36.1.
+        android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",promoted);
+        return builder.addExtras(extras).setOngoing(promoted).setShortCriticalText(chip)
             .setWhen(start).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-            .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end).addAction(action).build();
+            .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end).addAction(action);
     }
     static void cancelLive(Context c){
         NotificationManager manager=c.getSystemService(NotificationManager.class);
         for(StatusBarNotification n:manager.getActiveNotifications())
-            if((n.getId()==151||PREVIEW.equals(n.getTag()))&&((n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0||VivoIsland.hasPayload(n.getNotification())||XiaomiIsland.hasPayload(n.getNotification())))
+            if(PREVIEW.equals(n.getTag())||n.getId()==151&&((n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0||VivoIsland.hasPayload(n.getNotification())||XiaomiIsland.hasPayload(n.getNotification())))
                 VivoIsland.cancel(c,n.getTag(),n.getId());
     }
     static void reconcile(Context c,List<ReminderPlanner.Event> events,long now){
@@ -93,19 +80,44 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             if(!current)VivoIsland.cancel(c,n.getTag(),n.getId());
         }
     }
-    @android.annotation.SuppressLint("MissingPermission")
     static String preview(Context c){
-        if(!CourseReminder.notifications(c))return "请先允许通知，再预览倒计时。";
-        if(!enabled(c))return "请先开启课前实时倒计时。";
-        long now=System.currentTimeMillis(),start=now+180000;
-        NoticePreview sample=NoticePreview.sample(c);
-        Notification.Builder builder=sample.builder(c,start,true);
+        return submitPreview(c).message;
+    }
+    static final class PreviewResult {
+        final long target;final String message;
+        PreviewResult(long target,String message){this.target=target;this.message=message;}
+    }
+    @android.annotation.SuppressLint("MissingPermission")
+    static PreviewResult submitPreview(Context c){
         try{
+            if(!CourseReminder.notifications(c))return new PreviewResult(0,"请先允许通知，再预览倒计时。");
+            if(!enabled(c))return new PreviewResult(0,"请先开启课前实时倒计时。");
+            long now=System.currentTimeMillis(),start=now+180000;
+            NoticePreview sample=NoticePreview.sample(c);
+            Notification.Builder builder=sample.builder(c,start,true).setOnlyAlertOnce(false);
+            android.os.Bundle token=new android.os.Bundle();token.putLong("syuct.preview.target",start);builder.addExtras(token);
             c.getSystemService(NotificationManager.class).notify(PREVIEW,153,build(c,builder,sample.name,PREVIEW,153,start,now));
-            if(XiaomiIsland.device())return "已发送3分钟预览。"+XiaomiIsland.status(XiaomiIsland.protocol(c),XiaomiIsland.permission(c));
-            if(VivoIsland.attempt(c))return "已发送3分钟原子岛兼容预览；是否上岛由 vivo 系统决定。";
-            return available(c)?"已发送3分钟预览，请查看状态栏或锁屏；系统决定是否上岛。":"已发送普通通知预览，当前系统未允许实时显示。";
-        }catch(RuntimeException e){return "预览未能发送，请检查系统通知设置。";}
+            return new PreviewResult(start,"已发送预览请求，正在确认系统是否接收…");
+        }catch(RuntimeException e){return new PreviewResult(0,"预览发送失败，请检查通知权限与声音设置。");}
+    }
+    // Bounded check on a worker thread, not a polling service. An active record
+    // proves acceptance only, never that an OEM island actually appeared.
+    static String confirmPreview(Context c,PreviewResult result){
+        if(result.target==0)return result.message;
+        try{
+            for(int attempt=0;attempt<8;attempt++){
+                if(!enabled(c))return "实时倒计时已关闭，未继续预览。";
+                for(StatusBarNotification item:c.getSystemService(NotificationManager.class).getActiveNotifications()){
+                    Notification n=item.getNotification();
+                    if(item.getId()==153&&PREVIEW.equals(item.getTag())&&n.extras.getLong("syuct.preview.target")==result.target)
+                        return "系统已接收3分钟预览，请下拉通知栏查看。"+
+                            ((n.flags&Notification.FLAG_ONGOING_EVENT)!=0?"已请求实时显示，是否上岛由手机系统决定。":"当前为普通通知，系统未允许实时提升显示。");
+                }
+                if(attempt<7)Thread.sleep(150);
+            }
+            return "暂未确认系统接收到本次预览，请下拉通知栏核对；若没有通知，请检查通知权限。";
+        }catch(InterruptedException e){Thread.currentThread().interrupt();return "预览确认已中断，可重新尝试。";}
+        catch(RuntimeException e){return "预览请求已发送，但无法读取系统接收结果，请下拉通知栏核对。";}
     }
     @Override public void onReceive(Context c,Intent intent){
         if(!END.equals(intent.getAction()))return;

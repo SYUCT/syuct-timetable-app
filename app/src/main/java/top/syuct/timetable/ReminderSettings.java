@@ -19,8 +19,10 @@ final class ReminderSettings extends Dialog {
     private final Runnable permission,sound;
     private Switch master,precise,live;
     private TextView plan,precision,liveStatus,feedback;
-    private Button authorize,livePreview;
-    private boolean refreshing;
+    private Button authorize,livePreview,noticePreview;
+    private boolean refreshing,previewBusy;
+    private int previewGeneration;
+    private final android.os.Handler previewHandler=new android.os.Handler(android.os.Looper.getMainLooper());
     ReminderSettings(Activity activity,Runnable permission,Runnable sound){
         super(activity);this.activity=activity;this.permission=permission;this.sound=sound;
     }
@@ -68,7 +70,7 @@ final class ReminderSettings extends Dialog {
         LinearLayout island=card(content);live=toggle("课前实时倒计时");island.addView(live);
         add(island,text("试验功能 · 展示样式由手机系统决定",12,BLUE,false),4);
         liveStatus=text("",14,MUTED,false);add(island,liveStatus,6);
-        add(island,text("小米专用模板需要焦点通知权限：左侧校徽与课程，右侧开课时间。未获许可时改用“课程简称＋时间”的通用短文本，可能被截短；图标原色也取决于系统支持。vivo/iQOO 仍为实验兼容。",13,MUTED,false),8);
+        add(island,text("小米暂用通用实时通知，显示课程简称与时间；不再自动切换到未验证的专用模板。文字长度和图标颜色由系统控制。vivo/iQOO 仍为实验兼容。",13,MUTED,false),8);
         LinearLayout preview=card(content);preview.addView(text("看看提醒长什么样",18,INK,true));
         NoticePreview sample=NoticePreview.sample(activity);
         add(preview,text(sample.source(),13,MUTED,false),8);
@@ -76,8 +78,8 @@ final class ReminderSettings extends Dialog {
         sampleCard.setBackground(bg(0xffedf3fd,14));
         sampleCard.addView(text("效果预览",12,BLUE,true));add(sampleCard,text(sample.name,18,INK,true),6);
         add(sampleCard,text("课程地点："+sample.location(),14,MUTED,false),5);add(sampleCard,text("倒计时演示：从 3 分钟开始",14,MUTED,false),5);add(preview,sampleCard,12);
-        add(preview,button("查看通知效果",true,()->feedback.setText(CourseReminder.testNotification(activity))),12);
-        livePreview=button("预览 3 分钟倒计时",false,()->feedback.setText(LiveCourseNotice.preview(activity)));add(preview,livePreview,8);
+        noticePreview=button("查看通知效果",true,()->feedback.setText(CourseReminder.testNotification(activity)));add(preview,noticePreview,12);
+        livePreview=button("预览 3 分钟倒计时",false,this::startLivePreview);add(preview,livePreview,8);
         feedback=text("预览是可选体验，不影响正式提醒，也不代表后台触发一定准时。",13,MUTED,false);feedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);add(preview,feedback,10);
         add(content,text("请设置第一周日期与节次时间。系统强行停止、关机或撤销授权仍可能影响提醒；撤销准时提醒权限后，请重新打开 App 恢复普通预约。",12,MUTED,false),12);
         add(root,button("完成",false,this::dismiss),12);setContentView(root);
@@ -85,8 +87,36 @@ final class ReminderSettings extends Dialog {
         precise.setOnCheckedChangeListener((v,on)->{if(refreshing)return;ExactReminder.enable(activity,on);refresh();if(on&&!ExactReminder.permitted(activity))explainExact();});
         live.setOnCheckedChangeListener((v,on)->{if(refreshing)return;LiveCourseNotice.enable(activity,on);refresh();});refresh();
     }
+    private void startLivePreview(){
+        if(previewBusy)return;
+        previewBusy=true;int generation=++previewGeneration;
+        livePreview.setEnabled(false);noticePreview.setEnabled(false);live.setEnabled(false);
+        livePreview.setText("正在发送…");feedback.setText("正在发送3分钟预览，请稍候…");
+        feedback.post(()->{if(isShowing())feedback.requestRectangleOnScreen(new android.graphics.Rect(0,0,feedback.getWidth(),feedback.getHeight()),true);});
+        previewHandler.postDelayed(()->{
+            if(isShowing()&&generation==previewGeneration&&previewBusy)
+                feedback.setText("系统响应较慢，仍在确认预览；无需重复点击。可先下拉通知栏查看。");
+        },5000);
+        Context app=activity.getApplicationContext();
+        new Thread(()->{
+            String result;
+            try{result=LiveCourseNotice.confirmPreview(app,LiveCourseNotice.submitPreview(app));}
+            catch(RuntimeException e){result="预览未完成，请检查通知设置后重试。";}
+            String message=result;
+            previewHandler.post(()->{
+                if(generation!=previewGeneration||!isShowing())return;
+                previewBusy=false;previewHandler.removeCallbacksAndMessages(null);
+                livePreview.setText("预览 3 分钟倒计时");livePreview.setEnabled(true);noticePreview.setEnabled(true);
+                live.setEnabled(LiveCourseNotice.supported());feedback.setText(message);
+            });
+        },"course-preview").start();
+    }
+    @Override protected void onStop(){
+        previewGeneration++;previewBusy=false;previewHandler.removeCallbacksAndMessages(null);super.onStop();
+    }
     @Override protected void onStart(){
         super.onStart();Window window=getWindow();if(window==null)return;
+        if(!previewBusy){livePreview.setEnabled(true);noticePreview.setEnabled(true);livePreview.setText("预览 3 分钟倒计时");}
         window.setBackgroundDrawableResource(android.R.color.transparent);
         android.util.DisplayMetrics m=getContext().getResources().getDisplayMetrics();
         window.setLayout(Math.min(m.widthPixels-dp(24),dp(480)),(int)(m.heightPixels*.88));
@@ -95,7 +125,7 @@ final class ReminderSettings extends Dialog {
     void refresh(){
         if(master==null)return;refreshing=true;
         master.setChecked(CourseReminder.enabled(activity));precise.setChecked(ExactReminder.requested(activity));
-        live.setChecked(LiveCourseNotice.enabled(activity));live.setEnabled(LiveCourseNotice.supported());
+        live.setChecked(LiveCourseNotice.enabled(activity));live.setEnabled(!previewBusy&&LiveCourseNotice.supported());
         plan.setText(CourseReminder.status(activity));precision.setText(ExactReminder.status(activity));liveStatus.setText(LiveCourseNotice.status(activity));
         authorize.setVisibility(ExactReminder.requested(activity)&&!ExactReminder.permitted(activity)?View.VISIBLE:View.GONE);
         livePreview.setVisibility(LiveCourseNotice.supported()?View.VISIBLE:View.GONE);refreshing=false;
