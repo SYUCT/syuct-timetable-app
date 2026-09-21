@@ -10,6 +10,15 @@ import java.util.Collections;
 public final class NativeLiveProbe extends Activity {
     int checks;
     void check(boolean result,String message){if(!result)throw new AssertionError(message);checks++;}
+    void await(String message,java.util.function.BooleanSupplier condition,Runnable next){
+        long deadline=SystemClock.uptimeMillis()+5000;
+        Handler handler=new Handler(Looper.getMainLooper());
+        handler.post(new Runnable(){public void run(){
+            if(condition.getAsBoolean()){check(true,message);next.run();return;}
+            if(SystemClock.uptimeMillis()>=deadline)throw new AssertionError(message+" (system callback timeout)");
+            handler.postDelayed(this,50);
+        }});
+    }
     NotificationManager manager(){return getSystemService(NotificationManager.class);}
     Notification.Builder base(){return new Notification.Builder(this,CourseReminder.CHANNEL).setSmallIcon(R.drawable.ic_notification)
         .setContentTitle("课前倒计时 · 验证").setContentText("测试课程 · 测试教室").setStyle(new Notification.BigTextStyle().bigText("测试课程 · 测试教室"))
@@ -41,6 +50,24 @@ public final class NativeLiveProbe extends Activity {
         check(CourseNoticeStyle.compactTitle(null).equals("待上课"),"empty chip fallback");
         check(CourseNoticeStyle.compactTitle("化学").equals("化学"),"short course unchanged");
         check(CourseNoticeStyle.compactTitle("🧪实验课程").equals("🧪实验"),"chip does not split surrogate pair");
+        check(CourseNoticeStyle.fallbackChip("金属腐蚀理论及应用",0).equals("金属腐 08:00"),"generic Xiaomi fallback includes course AND time");
+        check(CourseNoticeStyle.fallbackChip(null,0).equals("待上课 08:00"),"fallback never time only");
+        Notification.Builder miIcon=base();CourseNoticeStyle.applyXiaomiIcon(this,miIcon);
+        Notification miNotice=miIcon.build();
+        check(miNotice.getSmallIcon().getType()==android.graphics.drawable.Icon.TYPE_RESOURCE&&miNotice.getSmallIcon().getResId()==R.drawable.campus_badge,"Xiaomi small icon is original colour resource, not generated alpha mask");
+        check(miNotice.extras.containsKey("miui.isGrayscaleIcon")&&!miNotice.extras.getBoolean("miui.isGrayscaleIcon"),"MIUI colour compatibility hint (rendering not proven)");
+        check(XiaomiIsland.permission((Bundle)null)==XiaomiIsland.UNKNOWN,"null provider reply unknown, not denied");
+        check(XiaomiIsland.permission(new Bundle())==XiaomiIsland.UNKNOWN,"missing permission unknown");
+        Bundle focus=new Bundle();focus.putString("canShowFocus","true");
+        check(XiaomiIsland.permission(focus)==XiaomiIsland.UNKNOWN,"wrong permission type unknown");
+        focus.putBoolean("canShowFocus",false);check(XiaomiIsland.permission(focus)==XiaomiIsland.DENIED,"explicit denial");
+        focus.putBoolean("canShowFocus",true);check(XiaomiIsland.permission(focus)==XiaomiIsland.GRANTED,"explicit permission");
+        check(!XiaomiIsland.nativeAllowed(3,XiaomiIsland.UNKNOWN),"protocol alone cannot authorize native renderer");
+        check(!XiaomiIsland.nativeAllowed(3,XiaomiIsland.DENIED),"denied uses fallback");
+        check(!XiaomiIsland.nativeAllowed(2,XiaomiIsland.GRANTED),"old protocol uses fallback");
+        check(XiaomiIsland.nativeAllowed(3,XiaomiIsland.GRANTED),"supported and granted native renderer");
+        check(XiaomiIsland.status(3,XiaomiIsland.DENIED).contains("未允许"),"denied status does not claim native success");
+        check(XiaomiIsland.status(3,XiaomiIsland.UNKNOWN).contains("暂未取得"),"unknown status honest");
         check(VivoIsland.device("iQOO","vivo")&&!VivoIsland.device("google","Google"),"OEM gate");
         Bundle vivo=VivoIsland.extras(this,"数值分析",0,null);
         check(vivo.getInt("notification.superx.operation",-1)==0,"vivo create");
@@ -85,6 +112,15 @@ public final class NativeLiveProbe extends Activity {
             Parcel parcel=Parcel.obtain();parcel.writeBundle(payload);parcel.setDataPosition(0);
             Bundle decoded=parcel.readBundle(getClassLoader());parcel.recycle();
             check(decoded.getString(XiaomiIsland.PARAM).contains("数值分"),"payload survives notification IPC");
+            if(Build.VERSION.SDK_INT>=36){
+                Notification nativeNotice=LiveCourseNotice.nativeNotice(base().addExtras(payload),action,stop,180000,0);
+                check(!nativeNotice.extras.getBoolean("android.requestPromotedOngoing"),"native route does not also request generic promotion");
+                check(nativeNotice.extras.getString("android.shortCriticalText")==null,"native route has no conflicting chip text");
+                check(XiaomiIsland.hasPayload(nativeNotice),"native route retains OEM payload");
+                check(nativeNotice.deleteIntent!=null&&nativeNotice.actions.length==1,"native route retains end action");
+                check(nativeNotice.getTimeoutAfter()==180000,"native route expires at start");
+                check(!ongoing(nativeNotice),"native fallback remains dismissible");
+            }
         }catch(org.json.JSONException e){throw new AssertionError(e);}
         if(getIntent().getBooleanExtra("visual",false)){
             long now=System.currentTimeMillis();
@@ -116,7 +152,7 @@ public final class NativeLiveProbe extends Activity {
             check(ongoing(live),"ongoing requested");
             check(live.hasPromotableCharacteristics(),"eligible notification characteristics");
             check(live.when==start,"system countdown target");
-            check((XiaomiIsland.device()?CourseNoticeStyle.time(start):"数值分").equals(live.extras.getString("android.shortCriticalText")),"OEM fallback chip policy");
+            check((XiaomiIsland.device()?CourseNoticeStyle.fallbackChip("数值分析",start):"数值分").equals(live.extras.getString("android.shortCriticalText")),"OEM fallback chip includes course and time");
             check(live.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER),"system chronometer");
             check(live.deleteIntent!=null,"dismissal callback");
             check(live.actions.length==1,"explicit end action");
@@ -131,8 +167,11 @@ public final class NativeLiveProbe extends Activity {
         new Handler(Looper.getMainLooper()).postDelayed(()->{
             check(manager().getActiveNotifications().length==0,"end action clears notification");
             manager().notify("qa",151,LiveCourseNotice.build(this,base(),"数值分析","qa",151,System.currentTimeMillis()+20000,System.currentTimeMillis()));
+            // notify()/cancel() are asynchronous in Android 16. Observe the post
+            // before reconciling; don't test the race between two IPC calls.
+            await("posted notice observable",()->manager().getActiveNotifications().length==1,()->{
             LiveCourseNotice.reconcile(this,Collections.emptyList(),System.currentTimeMillis());
-            check(manager().getActiveNotifications().length==0,"deleted course cancels notice");
+            await("deleted course cancels notice",()->manager().getActiveNotifications().length==0,()->{
             check(LiveCourseNotice.preview(this).startsWith("已发送"),"preview delivered");
             check(!CourseReminder.enabled(this),"preview does not enable scheduled reminders");
             check(CourseReminder.prefs(this).getStringSet("sent",Collections.emptySet()).isEmpty(),"preview does not mark courses sent");
@@ -147,6 +186,8 @@ public final class NativeLiveProbe extends Activity {
                 report.setText("PASS "+checks+" API "+Build.VERSION.SDK_INT);
                 android.util.Log.i("NativeLiveProbe","PASS "+checks+" API "+Build.VERSION.SDK_INT);
             },23000);
+            });
+            });
         },1000);
     }
 }

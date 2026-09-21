@@ -24,7 +24,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static String status(Context c){
         if(!supported())return "当前系统不支持 Android 16 实时通知，仍使用普通提醒。";
         if(!enabled(c))return "开启后，课前15分钟尝试显示系统倒计时；上课或关闭后结束。";
-        if(XiaomiIsland.attempt(c))return "已尝试小米左右分区：校徽与课程在左、时间在右。需系统允许焦点通知；不支持时保留通用提醒。";
+        if(XiaomiIsland.device())return XiaomiIsland.status(XiaomiIsland.protocol(c),XiaomiIsland.permission(c));
         if(VivoIsland.device())return "已开启 vivo 原子岛实验兼容；是否显示取决于系统版本和接入权限，不支持时保留普通通知。";
         return available(c)?"已开启。是否上岛及展示样式由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
     }
@@ -40,16 +40,24 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             .putExtra("key",key).putExtra("id",id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
         if(xiaomi){
-            try{builder.addExtras(XiaomiIsland.extras(c,name,builder.build(),start,now,endAction));}
-            catch(org.json.JSONException|RuntimeException e){xiaomi=false;}
+            try{
+                builder.addExtras(XiaomiIsland.extras(c,name,builder.build(),start,now,endAction));
+                return nativeNotice(builder,endAction,end,start,now);
+            }
+            catch(org.json.JSONException|RuntimeException e){
+                xiaomi=false;
+                builder.getExtras().remove(XiaomiIsland.PARAM);
+                builder.getExtras().remove("miui.focus.pics");
+                builder.getExtras().remove("miui.focus.actions");
+            }
         }
         // Official extras contract also works with compileSdk 36. The native setter
         // was only exposed in SDK 36.1; do not invoke it on base Android 16.
         android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",true);
-        // Xiaomi's OEM payload owns two regions. If unavailable, keep the time in
-        // the standard one-slot chip rather than replacing it with the course name.
+        // Fallback is one short text slot, NOT two OEM regions. Retain both pieces
+        // of information; the system may truncate this on narrow devices.
         builder.addExtras(extras).setOngoing(available(c)).setShortCriticalText(
-                XiaomiIsland.device()?CourseNoticeStyle.time(start):CourseNoticeStyle.compactTitle(name))
+                XiaomiIsland.device()?CourseNoticeStyle.fallbackChip(name,start):CourseNoticeStyle.compactTitle(name))
             .setWhen(start).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
             .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end)
             .addAction(endAction);
@@ -60,6 +68,15 @@ public final class LiveCourseNotice extends BroadcastReceiver {
                 .setDeleteIntent(null).setActions(new Notification.Action[0]).build();
         }
         return notice;
+    }
+    static Notification nativeNotice(Notification.Builder builder,Notification.Action action,PendingIntent end,long start,long now){
+        android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("android.requestPromotedOngoing",false);
+        // One renderer at a time: don't ask Android's generic chip to override
+        // the permitted Xiaomi focus template. OEM updatable controls its life.
+        builder.getExtras().remove("android.shortCriticalText");
+        return builder.addExtras(extras).setOngoing(false)
+            .setWhen(start).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+            .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end).addAction(action).build();
     }
     static void cancelLive(Context c){
         NotificationManager manager=c.getSystemService(NotificationManager.class);
@@ -85,7 +102,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         Notification.Builder builder=sample.builder(c,start,true);
         try{
             c.getSystemService(NotificationManager.class).notify(PREVIEW,153,build(c,builder,sample.name,PREVIEW,153,start,now));
-            if(XiaomiIsland.attempt(c))return "已发送小米左右分区预览；焦点通知权限和系统版本决定实际显示。";
+            if(XiaomiIsland.device())return "已发送3分钟预览。"+XiaomiIsland.status(XiaomiIsland.protocol(c),XiaomiIsland.permission(c));
             if(VivoIsland.attempt(c))return "已发送3分钟原子岛兼容预览；是否上岛由 vivo 系统决定。";
             return available(c)?"已发送3分钟预览，请查看状态栏或锁屏；系统决定是否上岛。":"已发送普通通知预览，当前系统未允许实时显示。";
         }catch(RuntimeException e){return "预览未能发送，请检查系统通知设置。";}

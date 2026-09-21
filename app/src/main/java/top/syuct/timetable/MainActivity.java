@@ -131,7 +131,9 @@ public class MainActivity extends Activity {
         if(request==31){if(results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED)requestReminderPermissions();else Toast.makeText(this,"未允许通知，上课提醒暂不可用。可在设置中开启。",Toast.LENGTH_LONG).show();}
         if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();
     }
-    @Override protected void onResume(){super.onResume();refreshWidget();if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();if(ready)web.evaluateJavascript("window.refreshClock()",null);showWidgetStatus();}
+    @Override protected void onResume(){super.onResume();refreshWidget();if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();if(ready)web.evaluateJavascript("window.refreshClock()",null);showWidgetStatus();
+        XiaomiIsland.refreshPermission(this,()->{if(!isFinishing()&&!isDestroyed()&&reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();});
+    }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == SCHOOL && result == RESULT_OK) {

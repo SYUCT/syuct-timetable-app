@@ -34,9 +34,17 @@ final class CourseNoticeStyle {
     }
     static Icon badgeIcon(Context context){return Icon.createWithResource(context,R.drawable.campus_badge);}
     static Notification.Builder apply(Context context,Notification.Builder builder){
-        return builder.setSmallIcon(smallIcon(context))
+        builder.setSmallIcon(smallIcon(context))
             .setLargeIcon(badgeIcon(context))
             .setColor(BLUE).setColorized(false);
+        if(XiaomiIsland.device())applyXiaomiIcon(context,builder);
+        return builder;
+    }
+    // MIUI compatibility hint, not an Android colour-icon guarantee. Keep it
+    // Xiaomi-only; the official focus template also uses the original resource.
+    static void applyXiaomiIcon(Context context,Notification.Builder builder){
+        android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("miui.isGrayscaleIcon",false);
+        builder.setSmallIcon(badgeIcon(context)).addExtras(extras);
     }
     static String time(long start){return Instant.ofEpochMilli(start).atZone(LessonClock.ZONE).format(DateTimeFormatter.ofPattern("HH:mm"));}
     static String compactTitle(String name){
@@ -44,6 +52,7 @@ final class CourseNoticeStyle {
         if(text.isEmpty())return "待上课";
         return text.substring(0,text.offsetByCodePoints(0,Math.min(3,text.codePointCount(0,text.length()))));
     }
+    static String fallbackChip(String name,long start){return compactTitle(name)+" "+time(start);}
     static String title(String name){
         String text=name==null?"":name.replaceAll("\\s+"," ").trim();
         if(text.isEmpty())return "即将上课";
