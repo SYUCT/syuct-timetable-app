@@ -52,11 +52,11 @@ final class CourseNoticeStyle {
         if(text.isEmpty())return "待上课";
         return text.substring(0,text.offsetByCodePoints(0,Math.min(3,text.codePointCount(0,text.length()))));
     }
-    static String fallbackChip(String name,long start){return compactTitle(name)+" "+time(start);}
     static String title(String name){
         String text=name==null?"":name.replaceAll("\\s+"," ").trim();
         if(text.isEmpty())return "即将上课";
         return text.codePointCount(0,text.length())<=8?text:text.substring(0,text.offsetByCodePoints(0,7))+"…";
     }
-    static String details(long start,String room){return "开课时间："+time(start)+"\n课程地点："+(room==null||room.trim().isEmpty()?"待定":room.trim());}
+    static String field(String value){return value==null||value.trim().isEmpty()?"未提供":value.trim();}
+    static String details(long start,String teacher,String room){return "开课时间："+time(start)+"\n授课教师："+field(teacher)+"\n上课教室："+field(room);}
 }

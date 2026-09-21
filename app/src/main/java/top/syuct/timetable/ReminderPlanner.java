@@ -7,8 +7,9 @@ import java.util.*;
 public final class ReminderPlanner {
     public static final long LEAD=15*60_000L;
     public static final class Course {
-        public String name,room,type;public int day,start,first,last;
-        public Course(String n,String r,String t,int d,int s,int f,int l){name=n;room=r;type=t;day=d;start=s;first=f;last=l;}
+        public String name,room,teacher,type;public int day,start,first,last;
+        public Course(String n,String r,String t,int d,int s,int f,int l){this(n,r,"",t,d,s,f,l);}
+        public Course(String n,String r,String teacher,String t,int d,int s,int f,int l){name=n;room=r;this.teacher=teacher;type=t;day=d;start=s;first=f;last=l;}
     }
     public static final class Event {
         public final Course course;public final long start,remind;public final String key;

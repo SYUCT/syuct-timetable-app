@@ -1,4 +1,6 @@
 <resources>
+    <string name="preview_countdown_label">预览 15 分钟倒计时</string>
+    <string name="preview_countdown_sending">正在发送15分钟预览，请稍候…</string>
     <string name="widget_description">今日课程与当前课标记，点击查看完整课表</string>
     <string name="widget_title">今日课表</string>
     <string name="widget_current">● 当前课</string>

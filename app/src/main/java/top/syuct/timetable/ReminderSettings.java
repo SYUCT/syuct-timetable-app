@@ -70,16 +70,16 @@ final class ReminderSettings extends Dialog {
         LinearLayout island=card(content);live=toggle("课前实时倒计时");island.addView(live);
         add(island,text("试验功能 · 展示样式由手机系统决定",12,BLUE,false),4);
         liveStatus=text("",14,MUTED,false);add(island,liveStatus,6);
-        add(island,text("小米暂用通用实时通知，显示课程简称与时间；不再自动切换到未验证的专用模板。文字长度和图标颜色由系统控制。vivo/iQOO 仍为实验兼容。",13,MUTED,false),8);
+        add(island,text("岛内仅显示距离开课的倒计时，不显示课程名或开课时刻。点开查看课程、时间、教师和教室。使用系统通用通知，不接入厂商 App ID；是否上岛及显示分秒还是分钟由系统决定。",13,MUTED,false),8);
         LinearLayout preview=card(content);preview.addView(text("看看提醒长什么样",18,INK,true));
         NoticePreview sample=NoticePreview.sample(activity);
         add(preview,text(sample.source(),13,MUTED,false),8);
         LinearLayout sampleCard=new LinearLayout(getContext());sampleCard.setOrientation(LinearLayout.VERTICAL);sampleCard.setPadding(dp(14),dp(12),dp(14),dp(12));
         sampleCard.setBackground(bg(0xffedf3fd,14));
         sampleCard.addView(text("效果预览",12,BLUE,true));add(sampleCard,text(sample.name,18,INK,true),6);
-        add(sampleCard,text("课程地点："+sample.location(),14,MUTED,false),5);add(sampleCard,text("倒计时演示：从 3 分钟开始",14,MUTED,false),5);add(preview,sampleCard,12);
+        add(sampleCard,text("授课教师："+CourseNoticeStyle.field(sample.teacher),14,MUTED,false),5);add(sampleCard,text("上课教室："+sample.location(),14,MUTED,false),5);add(sampleCard,text("倒计时演示：从 15 分钟开始",14,MUTED,false),5);add(preview,sampleCard,12);
         noticePreview=button("查看通知效果",true,()->feedback.setText(CourseReminder.testNotification(activity)));add(preview,noticePreview,12);
-        livePreview=button("预览 3 分钟倒计时",false,this::startLivePreview);add(preview,livePreview,8);
+        livePreview=button(getContext().getString(R.string.preview_countdown_label),false,this::startLivePreview);add(preview,livePreview,8);
         feedback=text("预览是可选体验，不影响正式提醒，也不代表后台触发一定准时。",13,MUTED,false);feedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);add(preview,feedback,10);
         add(content,text("请设置第一周日期与节次时间。系统强行停止、关机或撤销授权仍可能影响提醒；撤销准时提醒权限后，请重新打开 App 恢复普通预约。",12,MUTED,false),12);
         add(root,button("完成",false,this::dismiss),12);setContentView(root);
@@ -91,7 +91,7 @@ final class ReminderSettings extends Dialog {
         if(previewBusy)return;
         previewBusy=true;int generation=++previewGeneration;
         livePreview.setEnabled(false);noticePreview.setEnabled(false);live.setEnabled(false);
-        livePreview.setText("正在发送…");feedback.setText("正在发送3分钟预览，请稍候…");
+        livePreview.setText("正在发送…");feedback.setText(R.string.preview_countdown_sending);
         feedback.post(()->{if(isShowing())feedback.requestRectangleOnScreen(new android.graphics.Rect(0,0,feedback.getWidth(),feedback.getHeight()),true);});
         previewHandler.postDelayed(()->{
             if(isShowing()&&generation==previewGeneration&&previewBusy)
@@ -106,7 +106,7 @@ final class ReminderSettings extends Dialog {
             previewHandler.post(()->{
                 if(generation!=previewGeneration||!isShowing())return;
                 previewBusy=false;previewHandler.removeCallbacksAndMessages(null);
-                livePreview.setText("预览 3 分钟倒计时");livePreview.setEnabled(true);noticePreview.setEnabled(true);
+                livePreview.setText(R.string.preview_countdown_label);livePreview.setEnabled(true);noticePreview.setEnabled(true);
                 live.setEnabled(LiveCourseNotice.supported());feedback.setText(message);
             });
         },"course-preview").start();
@@ -116,7 +116,7 @@ final class ReminderSettings extends Dialog {
     }
     @Override protected void onStart(){
         super.onStart();Window window=getWindow();if(window==null)return;
-        if(!previewBusy){livePreview.setEnabled(true);noticePreview.setEnabled(true);livePreview.setText("预览 3 分钟倒计时");}
+        if(!previewBusy){livePreview.setEnabled(true);noticePreview.setEnabled(true);livePreview.setText(R.string.preview_countdown_label);}
         window.setBackgroundDrawableResource(android.R.color.transparent);
         android.util.DisplayMetrics m=getContext().getResources().getDisplayMetrics();
         window.setLayout(Math.min(m.widthPixels-dp(24),dp(480)),(int)(m.heightPixels*.88));

@@ -37,7 +37,7 @@ public final class CourseReminder extends BroadcastReceiver {
             JSONObject s=state.getJSONObject("settings");JSONArray raw=state.getJSONArray("courses");
             String[][] times=WidgetState.readTimes(s.has("periodTimes")?s.getJSONArray("periodTimes"):new JSONArray(WidgetState.defaults(c)));
             List<ReminderPlanner.Course> courses=new ArrayList<>();
-            for(int i=0;i<raw.length();i++){JSONObject x=raw.getJSONObject(i);courses.add(new ReminderPlanner.Course(x.getString("name"),x.optString("room"),x.getString("weekType"),x.getInt("weekday"),x.getInt("startSection"),x.getInt("startWeek"),x.getInt("endWeek")));}
+            for(int i=0;i<raw.length();i++){JSONObject x=raw.getJSONObject(i);courses.add(new ReminderPlanner.Course(x.getString("name"),x.optString("room"),x.optString("teacher"),x.getString("weekType"),x.getInt("weekday"),x.getInt("startSection"),x.getInt("startWeek"),x.getInt("endWeek")));}
             return ReminderPlanner.events(s.optString("firstWeekDate"),s.getInt("totalWeeks"),times,courses);
         }catch(Exception e){return Collections.emptyList();}
     }
@@ -108,7 +108,7 @@ public final class CourseReminder extends BroadcastReceiver {
             Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
             Notification.Builder builder=new Notification.Builder(c,CHANNEL)
                 .setContentTitle(CourseNoticeStyle.title(e.course.name)).setContentText(body)
-                .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(CourseNoticeStyle.details(e.start,e.course.room)))
+                .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(CourseNoticeStyle.details(e.start,e.course.teacher,e.course.room)))
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
                 .setTimeoutAfter(e.start-now);

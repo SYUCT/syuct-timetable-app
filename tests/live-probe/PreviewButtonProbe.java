@@ -17,7 +17,7 @@ public final class PreviewButtonProbe extends Activity {
         if(root instanceof ViewGroup){ViewGroup group=(ViewGroup)root;for(int i=0;i<group.getChildCount();i++){View found=find(group.getChildAt(i),match);if(found!=null)return found;}}
         return null;
     }
-    Button button(){return (Button)find(dialog.getWindow().getDecorView(),v->v instanceof Button&&((Button)v).getText().toString().equals("预览 3 分钟倒计时"));}
+    Button button(){return (Button)find(dialog.getWindow().getDecorView(),v->v instanceof Button&&((Button)v).getText().toString().equals("预览 15 分钟倒计时"));}
     TextView feedback(){return (TextView)find(dialog.getWindow().getDecorView(),v->v instanceof TextView&&((TextView)v).getText().toString().startsWith("预览是可选体验"));}
     void await(String label,java.util.function.BooleanSupplier ready,Runnable next){
         long deadline=SystemClock.uptimeMillis()+7000;
@@ -59,7 +59,7 @@ public final class PreviewButtonProbe extends Activity {
                 check(current()!=null,"notification actually posted");
                 Notification first=current().getNotification();long target=first.extras.getLong("syuct.preview.target");
                 check(target>System.currentTimeMillis(),"this preview has future token");
-                check(first.getTimeoutAfter()==180000,"three minute system expiry");
+                check(first.getTimeoutAfter()==ReminderPlanner.LEAD,"fifteen minute system expiry");
                 check(!XiaomiIsland.hasPayload(first),"actual button does not select unverified native template");
                 check((first.flags&Notification.FLAG_ONLY_ALERT_ONCE)==0,"explicit repeat preview can alert again");
                 check(!CourseReminder.enabled(this),"preview does not enable real reminders");

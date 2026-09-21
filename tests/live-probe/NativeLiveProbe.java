@@ -44,14 +44,14 @@ public final class NativeLiveProbe extends Activity {
         check(CourseNoticeStyle.title("").equals("即将上课"),"empty title");
         check(CourseNoticeStyle.title("新时代中国特色社会主义理论与实践").codePointCount(0,8)==8,"compact long title");
         check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
-        check(CourseNoticeStyle.details(0,"").equals("开课时间：08:00\n课程地点：待定"),"separate details without invented room");
+        check(CourseNoticeStyle.details(0,"","").equals("开课时间：08:00\n授课教师：未提供\n上课教室：未提供"),"separate details without invented room");
         check(CourseNoticeStyle.compactTitle("数值分析").equals("数值分"),"chip first three course characters");
         check(CourseNoticeStyle.compactTitle("  高 等\n数学").equals("高等数"),"chip strips whitespace");
         check(CourseNoticeStyle.compactTitle(null).equals("待上课"),"empty chip fallback");
         check(CourseNoticeStyle.compactTitle("化学").equals("化学"),"short course unchanged");
         check(CourseNoticeStyle.compactTitle("🧪实验课程").equals("🧪实验"),"chip does not split surrogate pair");
-        check(CourseNoticeStyle.fallbackChip("金属腐蚀理论及应用",0).equals("金属腐 08:00"),"generic Xiaomi fallback includes course AND time");
-        check(CourseNoticeStyle.fallbackChip(null,0).equals("待上课 08:00"),"fallback never time only");
+        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00\n授课教师：张老师\n上课教室：瑞师楼222"),"labelled teacher and classroom");
+        check(CourseNoticeStyle.details(0,null,null).contains("授课教师：未提供"),"missing fields not invented");
         Notification.Builder miIcon=base();CourseNoticeStyle.applyXiaomiIcon(this,miIcon);
         Notification miNotice=miIcon.build();
         check(miNotice.getSmallIcon().getType()==android.graphics.drawable.Icon.TYPE_RESOURCE&&miNotice.getSmallIcon().getResId()==R.drawable.campus_badge,"Xiaomi small icon is original colour resource, not generated alpha mask");
@@ -113,23 +113,32 @@ public final class NativeLiveProbe extends Activity {
             Bundle decoded=parcel.readBundle(getClassLoader());parcel.recycle();
             check(decoded.getString(XiaomiIsland.PARAM).contains("数值分"),"payload survives notification IPC");
             if(Build.VERSION.SDK_INT>=36){
-                Notification restored=LiveCourseNotice.liveState(base().addExtras(payload),"数值分 08:00",action,stop,180000,0,true).build();
+                Notification restored=LiveCourseNotice.liveState(base().setShortCriticalText("stale course 08:00").addExtras(payload),action,stop,180000,0,true).build();
                 check(restored.extras.getBoolean("android.requestPromotedOngoing"),"regression: preserve generic promotion request");
-                check("数值分 08:00".equals(restored.extras.getString("android.shortCriticalText")),"regression: preserve name AND time");
+                check(restored.extras.getString("android.shortCriticalText")==null,"no fixed text can override countdown");
+                check(restored.when==180000&&restored.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)&&restored.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN),"system owns ticking countdown");
+                Notification late=LiveCourseNotice.liveState(base(),action,stop,900000,300000,true).build();
+                check(late.when==900000&&late.getTimeoutAfter()==600000,"late delivery uses remaining ten minutes, never restarts fifteen");
+                Notification full=LiveCourseNotice.liveState(base(),action,stop,900000,0,true).build();
+                check(full.getTimeoutAfter()==ReminderPlanner.LEAD,"fifteen minute countdown lifetime");
+                Notification fixed=LiveCourseNotice.liveState(base(),action,stop,900000,0,true).setShortCriticalText("旧文字").build();
+                check(full.hasPromotableCharacteristics()==fixed.hasPromotableCharacteristics(),"removing fixed text does not change this OS promotion eligibility");
                 check(!XiaomiIsland.hasPayload(restored),"unverified OEM template cannot hijack standard route");
                 check(restored.deleteIntent!=null&&restored.actions.length==1,"restored route retains end action");
                 check(restored.getTimeoutAfter()==180000,"restored route expires at start");
                 check(ongoing(restored),"regression: ongoing NOT cleared on granted focus permission");
-                check(!ongoing(LiveCourseNotice.liveState(base(),"数值分",action,stop,180000,0,false).build()),"generic permission denial still respected");
+                check(!ongoing(LiveCourseNotice.liveState(base(),action,stop,180000,0,false).build()),"generic permission denial still respected");
             }
         }catch(org.json.JSONException e){throw new AssertionError(e);}
         if(getIntent().getBooleanExtra("visual",false)){
             long now=System.currentTimeMillis();
-            Notification.Builder visual=new Notification.Builder(this,CourseReminder.CHANNEL).setContentTitle("课前预览")
-                .setContentText(CourseNoticeStyle.time(now+180000)+" 开课 · 瑞师楼222")
-                .setStyle(new Notification.BigTextStyle().setBigContentTitle("课前提醒 · 预览")
-                    .bigText(CourseNoticeStyle.details(now+180000,"瑞师楼222")+"\n仅作效果预览，3分钟后结束。"));
-            LiveCourseNotice.enable(this,true);manager().notify("visual",153,LiveCourseNotice.build(this,visual,"数值分析","visual",153,now+180000,now));
+            // Exercise the exact shared countdown builder even on an emulator
+            // which demotes notifications. This verifies ticking, NOT OEM island.
+            PendingIntent stop=PendingIntent.getBroadcast(this,153,new Intent(this,LiveCourseNotice.class)
+                .setAction(LiveCourseNotice.END).putExtra("key",LiveCourseNotice.PREVIEW).putExtra("id",153),PendingIntent.FLAG_IMMUTABLE);
+            Notification.Action action=new Notification.Action.Builder(null,"结束提醒",stop).build();
+            Notification.Builder visual=CourseNoticeStyle.apply(this,new NoticePreview("工程伦理","瑞师楼324","示例教师",false).builder(this,now+ReminderPlanner.LEAD,true));
+            manager().notify(LiveCourseNotice.PREVIEW,153,LiveCourseNotice.liveState(visual,action,stop,now+ReminderPlanner.LEAD,now,true).build());
             report.setText("PASS "+checks+" style visual");android.util.Log.i("NativeLiveProbe","PASS "+checks+" style visual");return;
         }
         boolean denied=getIntent().getBooleanExtra("denied",false);
@@ -153,7 +162,7 @@ public final class NativeLiveProbe extends Activity {
             check(ongoing(live),"ongoing requested");
             check(live.hasPromotableCharacteristics(),"eligible notification characteristics");
             check(live.when==start,"system countdown target");
-            check((XiaomiIsland.device()?CourseNoticeStyle.fallbackChip("数值分析",start):"数值分").equals(live.extras.getString("android.shortCriticalText")),"OEM fallback chip includes course and time");
+            check(live.extras.getString("android.shortCriticalText")==null,"countdown has no course/time string");
             check(live.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER),"system chronometer");
             check(live.deleteIntent!=null,"dismissal callback");
             check(live.actions.length==1,"explicit end action");

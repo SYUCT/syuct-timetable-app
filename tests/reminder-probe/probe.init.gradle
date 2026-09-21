@@ -1,3 +1,7 @@
 allprojects { afterEvaluate { p ->
-    if (p.plugins.hasPlugin('com.android.application')) p.android.buildTypes.debug.applicationIdSuffix = '.reminderprobe'
+    if (p.plugins.hasPlugin('com.android.application')) {
+        p.android.buildTypes.debug.applicationIdSuffix = '.reminderprobe'
+        p.android.sourceSets.debug.java.srcDir(p.rootProject.file('tests/reminder-probe'))
+        p.android.sourceSets.debug.manifest.srcFile(p.rootProject.file('tests/reminder-probe/AndroidManifest.xml'))
+    }
 } }

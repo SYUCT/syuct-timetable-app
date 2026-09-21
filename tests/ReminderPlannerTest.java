@@ -10,6 +10,12 @@ public class ReminderPlannerTest {
   String[][] times={{"08:00","08:50"},{"09:00","09:50"},{"10:10","11:00"},{"11:10","12:00"},{"13:30","14:20"},{"14:30","15:20"},{"15:40","16:30"},{"16:40","17:30"},{"18:30","19:20"},{"19:30","20:20"},{"",""},{"",""}};
   var c=course("课程甲",1,1,"all");var events=ReminderPlanner.events("2026-08-31",20,times,List.of(c));
   check(events.size()==20);check(events.get(0).start==at("2026-08-31T08:00:00"));check(events.get(0).remind==at("2026-08-31T07:45:00"));
+  check(c.teacher.equals(""));
+  var withTeacher=new ReminderPlanner.Course(c.name,c.room,"张老师",c.type,c.day,c.start,c.first,c.last);
+  var teacherEvents=ReminderPlanner.events("2026-08-31",20,times,List.of(withTeacher));
+  check(teacherEvents.get(0).course.teacher.equals("张老师"));
+  check(teacherEvents.get(0).key.equals(events.get(0).key)); // Keep pre-upgrade sent journal stable.
+  check(teacherEvents.get(0).start-teacherEvents.get(0).remind==900000);
   check(ReminderPlanner.events("2026-08-31",20,times,List.of(c,c)).size()==20);
   check(ReminderPlanner.events("",20,times,List.of(c)).isEmpty());check(ReminderPlanner.events("2026-09-01",20,times,List.of(c)).isEmpty());
   var odd=ReminderPlanner.events("2026-08-31",20,times,List.of(course("单周",1,1,"odd")));check(odd.size()==10);check(odd.get(1).start==at("2026-09-14T08:00:00"));

@@ -132,7 +132,6 @@ public class MainActivity extends Activity {
         if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();
     }
     @Override protected void onResume(){super.onResume();refreshWidget();if(reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();if(ready)web.evaluateJavascript("window.refreshClock()",null);showWidgetStatus();
-        XiaomiIsland.refreshPermission(this,()->{if(!isFinishing()&&!isDestroyed()&&reminderDialog!=null&&reminderDialog.isShowing())reminderDialog.refresh();});
     }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);

@@ -23,9 +23,15 @@ public final class NativeReminderProbe extends Activity {
             LocalDate first=LocalDate.now(LessonClock.ZONE).with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)).plusWeeks(1);
             long start=first.atTime(13,30).atZone(LessonClock.ZONE).toInstant().toEpochMilli(),due=start-900000;
             JSONObject settings=new JSONObject().put("firstWeekDate",first.toString()).put("totalWeeks",20);
-            JSONObject course=new JSONObject().put("name","提醒测试课程").put("room","测试教室").put("weekType","all").put("weekday",1).put("startSection",5).put("startWeek",1).put("endWeek",20);
+            JSONObject course=new JSONObject().put("name","提醒测试课程").put("teacher","测试教师").put("room","测试教室").put("weekType","all").put("weekday",1).put("startSection",5).put("startWeek",1).put("endWeek",20);
             JSONObject sample=new JSONObject().put("settings",settings).put("courses",new JSONArray().put(course));
             getSharedPreferences("timetable",MODE_PRIVATE).edit().putString("state",sample.toString()).commit();
+            check(CourseReminder.events(this).get(0).course.teacher.equals("测试教师"),"stored teacher reaches planner");
+            NoticePreview preview=NoticePreview.sample(this);
+            check(preview.teacher.equals("测试教师")&&preview.borrowed,"preview borrows real teacher");
+            Notification sampleNotice=preview.builder(this,start,true).build();
+            check(sampleNotice.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("授课教师：测试教师"),"preview expanded teacher");
+            check(sampleNotice.getTimeoutAfter()==900000,"preview lasts fifteen minutes");
             CourseReminder.prefs(this).edit().putBoolean("enabled",true).commit();
             if(blocked){
                 check(!CourseReminder.notifications(this),"notification permission denied");
@@ -41,6 +47,10 @@ public final class NativeReminderProbe extends Activity {
                 check(CourseReminder.status(this).contains("下次计划提醒"),"next reminder displayed");
                 CourseReminder.schedule(this,due+300000,false);
                 check(manager().getActiveNotifications().length==1,"reopening sends unsent reminder");
+                Notification actual=manager().getActiveNotifications()[0].getNotification();
+                check(actual.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("提醒测试课程"),"full course title");
+                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("开课时间：13:30\n授课教师：测试教师\n上课教室：测试教室"),"actual dispatched reminder has all four fields");
+                check(actual.getTimeoutAfter()==600000,"late delivery expires at actual start");
                 long posted=manager().getActiveNotifications()[0].getPostTime();
                 String key=manager().getActiveNotifications()[0].getTag();
                 check(CourseReminder.prefs(this).getLong("scheduledAt",0)==due+7*86400000L,"next week reserved");
@@ -57,6 +67,9 @@ public final class NativeReminderProbe extends Activity {
                 check(!CourseReminder.enabled(this),"test does not enable reminders");
                 check(CourseReminder.prefs(this).getStringSet("sent",Set.of()).isEmpty(),"test does not mark courses sent");
                 manager().cancelAll();
+                course.remove("teacher");getSharedPreferences("timetable",MODE_PRIVATE).edit().putString("state",sample.toString()).commit();
+                check(CourseReminder.events(this).get(0).course.teacher.isEmpty(),"legacy course without teacher still schedules");
+                check(NoticePreview.sample(this).builder(this,start,true).build().extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("授课教师：未提供"),"legacy preview never invents teacher");
                 WidgetPinRequest.prefs(this).edit().clear().commit();check(WidgetPinRequest.status(this).isEmpty(),"no phantom pin result");
                 WidgetPinRequest.prefs(this).edit().putString("state","pending").putString("token","expected").putLong("at",System.currentTimeMillis()).commit();
                 check(!WidgetPinRequest.status(this).startsWith("已添加"),"request is not success");
