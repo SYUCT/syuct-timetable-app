@@ -30,8 +30,6 @@ jobs:
           java -cp test-results LessonClockTest
           java -cp test-results ReminderPlannerTest
           java -cp test-results UpdatePolicyTest
-          javac -d test-results tests/CountdownTextTest.java app/src/main/java/top/syuct/timetable/CountdownText.java
-          java -cp test-results top.syuct.timetable.CountdownTextTest
       - name: Verify update manifest parsing and HTTPS rules
         run: |
           curl --fail --location --max-time 30 https://repo.maven.apache.org/maven2/org/json/json/20240303/json-20240303.jar -o test-results/json-test.jar

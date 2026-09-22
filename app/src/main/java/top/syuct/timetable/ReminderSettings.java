@@ -70,7 +70,7 @@ final class ReminderSettings extends Dialog {
         LinearLayout island=card(content);live=toggle("课前实时倒计时");island.addView(live);
         add(island,text("试验功能 · 展示样式由手机系统决定",12,BLUE,false),4);
         liveStatus=text("",14,MUTED,false);add(island,liveStatus,6);
-        add(island,text("点开查看课程、时间、教师和教室。小米尝试显示剩余分钟数，静默刷新；省电休眠期间可能延迟，展开卡片的系统计时仍按开课时间计算。不接入厂商 App ID，不新增权限或常驻服务；是否上岛由系统决定。",13,MUTED,false),8);
+        add(island,text("岛内显示课程名前四字，不再显示剩余分钟。系统卡片仅放简短摘要，点“查看详情”可分项查看完整课程、时间、教师和教室。卡片计时仍由系统处理；不接入厂商 App ID，不新增权限或常驻服务。",13,MUTED,false),8);
         LinearLayout preview=card(content);preview.addView(text("看看提醒长什么样",18,INK,true));
         NoticePreview sample=NoticePreview.sample(activity);
         add(preview,text(sample.source(),13,MUTED,false),8);

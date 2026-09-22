@@ -101,13 +101,13 @@ public final class CourseReminder extends BroadcastReceiver {
     private static void firePending(Context c,List<ReminderPlanner.Event> all,long now,Set<String> sent){
         SharedPreferences p=prefs(c);
         for(ReminderPlanner.Event e:ReminderPlanner.pending(all,now,sent)){
-            Intent open=new Intent(c,MainActivity.class).setAction(TodayWidget.OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            PendingIntent pi=PendingIntent.getActivity(c,170,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            PendingIntent pi=CourseNoticeDetails.open(c,e.key,e.course.name,e.start,e.course.teacher,e.course.room,false);
             String body=CourseNoticeStyle.details(e.start,e.course.teacher,e.course.room);
             Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
             Notification.Builder builder=new Notification.Builder(c,CHANNEL)
-                .setContentTitle(CourseNoticeStyle.title(e.course.name)).setContentText(body)
+                .setContentTitle(CourseNoticeStyle.chipName(e.course.name)).setContentText(CourseNoticeStyle.summary(e.start))
                 .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(body))
+                .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
                 .setTimeoutAfter(e.start-now);

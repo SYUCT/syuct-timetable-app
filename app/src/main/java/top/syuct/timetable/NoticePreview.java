@@ -16,13 +16,12 @@ final class NoticePreview {
     String source(){return borrowed?"使用下一门课的名称、教师与教室，仅演示，不改变课程时间。":"示例课程，仅用于演示，不会加入你的课表。";}
     String location(){return room==null||room.trim().isEmpty()?"地点待定":room.trim();}
     Notification.Builder builder(Context c,long start,boolean countdown){
-        Intent open=new Intent(c,MainActivity.class).setAction(TodayWidget.OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi=PendingIntent.getActivity(c,173,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent pi=CourseNoticeDetails.open(c,countdown?LiveCourseNotice.PREVIEW:"reminder_test",name,start,teacher,room,true);
         String detail=CourseNoticeStyle.details(start,teacher,room);
         return new Notification.Builder(c,CourseReminder.CHANNEL)
-            .setContentTitle(CourseNoticeStyle.title("预览·"+name)).setContentText(detail)
-            .setStyle(new Notification.BigTextStyle().setBigContentTitle("效果预览｜"+name)
-                .bigText(detail+"。（演示时间，非实际开课时间）"))
+            .setContentTitle(CourseNoticeStyle.chipName(name)).setSubText("效果预览").setContentText(CourseNoticeStyle.summary(start))
+            .setStyle(new Notification.BigTextStyle().setBigContentTitle(name).bigText(detail))
+            .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
             .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setPublicVersion(CourseNoticeStyle.apply(c,new Notification.Builder(c,CourseReminder.CHANNEL)).setContentTitle("提醒效果预览").setContentText("解锁查看预览内容").build())
             .setTimeoutAfter(countdown?ReminderPlanner.LEAD:60000);

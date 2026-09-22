@@ -8,6 +8,13 @@ import java.util.Locale;
 
 /** Only icon detection and cancellation of notices posted by older versions. */
 final class NoticeCompat {
+    static final String OLD_REFRESH="top.syuct.timetable.REFRESH_COUNTDOWN";
+    static void cancelOldRefresh(Context c,String key,int id){
+        android.content.Intent intent=new android.content.Intent(c,LiveCourseNotice.class).setAction(OLD_REFRESH)
+            .setData(android.net.Uri.parse("syuct-live://refresh/"+android.net.Uri.encode(key)));
+        PendingIntent pending=PendingIntent.getBroadcast(c,id,intent,PendingIntent.FLAG_NO_CREATE|PendingIntent.FLAG_IMMUTABLE);
+        if(pending!=null)c.getSystemService(AlarmManager.class).cancel(pending);
+    }
     static boolean xiaomi(String brand,String maker){
         String b=brand==null?"":brand.toLowerCase(Locale.ROOT),m=maker==null?"":maker.toLowerCase(Locale.ROOT);
         return b.equals("xiaomi")||b.equals("redmi")||b.equals("poco")||m.equals("xiaomi");
@@ -19,7 +26,7 @@ final class NoticeCompat {
     @android.annotation.SuppressLint("MissingPermission")
     static void cancel(Context c,String tag,int id){
         // A cosmetic timer cancellation error must not prevent normal dismissal.
-        try{CountdownDisplay.cancel(c,tag,id);}catch(RuntimeException ignored){}
+        try{cancelOldRefresh(c,tag,id);}catch(RuntimeException ignored){}
         NotificationManager manager=c.getSystemService(NotificationManager.class);
         try{
             for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications()){

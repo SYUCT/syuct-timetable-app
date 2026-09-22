@@ -46,13 +46,17 @@ final class CourseNoticeStyle {
         builder.setSmallIcon(badgeIcon(context)).addExtras(extras);
     }
     static String time(long start){return Instant.ofEpochMilli(start).atZone(LessonClock.ZONE).format(DateTimeFormatter.ofPattern("HH:mm"));}
-    static String title(String name){
-        String text=name==null?"":name.replaceAll("\\s+"," ").trim();
-        if(text.isEmpty())return "即将上课";
-        return text.codePointCount(0,text.length())<=8?text:text.substring(0,text.offsetByCodePoints(0,7))+"…";
-    }
     static String field(String value){return value==null||value.trim().isEmpty()?"未提供":value.trim();}
-    // HyperOS' floating expansion can take only the first newline-delimited item.
-    // Keep all fields in one paragraph and let SystemUI wrap it to available width.
-    static String details(long start,String teacher,String room){return "开课时间："+time(start)+"；授课教师："+field(teacher)+"；上课教室："+field(room);}
+    static String chipName(String name){
+        String text=name==null?"":name.replaceAll("[\\s\\u00a0\\u3000]+","");
+        if(text.isEmpty())return "课程提醒";
+        return text.substring(0,text.offsetByCodePoints(0,Math.min(4,text.codePointCount(0,text.length()))));
+    }
+    static Notification.Builder chip(Notification.Builder builder,String name){
+        builder.setContentTitle(chipName(name));
+        if(android.os.Build.VERSION.SDK_INT>=36)builder.setShortCriticalText(chipName(name));
+        return builder;
+    }
+    static String summary(long start){return time(start)+" 开课 · 点“查看详情”";}
+    static String details(long start,String teacher,String room){return summary(start)+"\n授课教师："+field(teacher)+"\n上课教室："+field(room);}
 }

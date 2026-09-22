@@ -7,7 +7,7 @@ import android.os.Build;
 import android.service.notification.StatusBarNotification;
 import java.util.List;
 
-/** Optional live countdown. No foreground service; HyperOS has a minute-text fallback. */
+/** Four-character course chip with a system-owned timer in the expanded card. */
 public final class LiveCourseNotice extends BroadcastReceiver {
     static final String END="top.syuct.timetable.END_LIVE_COURSE", PREVIEW="live_course_preview";
     static boolean enabled(Context c){return CourseReminder.prefs(c).getBoolean("liveCountdown",false);}
@@ -24,27 +24,29 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static String status(Context c){
         if(!supported())return "当前系统不支持 Android 16 实时通知，仍使用普通提醒。";
         if(!enabled(c))return "开启后，课前15分钟尝试显示系统倒计时；上课或关闭后结束。";
-        return available(c)?"已开启。课前15分钟显示剩余倒计时；点开查看课程、时间、教师和教室。是否上岛及秒数样式由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
+        return available(c)?"已开启。岛内显示课程名前四字；卡片保留系统计时，点“查看详情”查看完整课程信息。是否上岛由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
     }
     static Notification build(Context c,Notification.Builder builder,String key,int id,long start,long now){
         CourseNoticeStyle.apply(c,builder);
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
         if(Build.VERSION.SDK_INT<36||!available(c))return builder.build();
+        Notification original=builder.build();
         PendingIntent end=PendingIntent.getBroadcast(c,id,new Intent(c,LiveCourseNotice.class)
             .setAction(END).addFlags(Intent.FLAG_RECEIVER_FOREGROUND).setData(Uri.parse("syuct-live://end/"+Uri.encode(key)))
             .putExtra("key",key).putExtra("id",id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
-        // No fixed short text: SystemUI owns the ticking countdown from `when`.
+        // The header timer remains system-owned; the chip uses four course characters.
         // Never restart at 15 minutes if delivery was late; target actual class start.
         liveState(builder,endAction,end,start,now,true);
+        CourseNoticeStyle.chip(builder,original.extras.getCharSequence(Notification.EXTRA_TITLE,"").toString());
         Notification notice=builder.build();
         if(!notice.hasPromotableCharacteristics()){
             android.os.Bundle extras=new android.os.Bundle();
             extras.putBoolean("android.requestPromotedOngoing",false);
             return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false).setShortCriticalText(null)
-                .setDeleteIntent(null).setActions(new Notification.Action[0]).build();
+                .setDeleteIntent(null).setActions(original.actions==null?new Notification.Action[0]:original.actions).build();
         }
-        return NoticeCompat.xiaomi()?CountdownDisplay.apply(builder,start,now).build():notice;
+        return notice;
     }
     static Notification.Builder liveState(Notification.Builder builder,Notification.Action action,PendingIntent end,long start,long now,boolean promoted){
         if(Build.VERSION.SDK_INT<36)return builder;
@@ -115,16 +117,14 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     @android.annotation.SuppressLint("MissingPermission")
     static void post(Context c,String key,int id,Notification notice){
         c.getSystemService(NotificationManager.class).notify(key,id,notice);
-        // Failure to reserve a cosmetic refresh must never turn a delivered course
-        // reminder into an error/retry (and thus duplicate its alert).
-        try{CountdownDisplay.schedule(c,key,id,notice,System.currentTimeMillis());}catch(RuntimeException ignored){}
     }
     @Override public void onReceive(Context c,Intent intent){
-        if(!END.equals(intent.getAction())&&!CountdownDisplay.REFRESH.equals(intent.getAction()))return;
+        if(!END.equals(intent.getAction())&&!NoticeCompat.OLD_REFRESH.equals(intent.getAction()))return;
         String key=intent.getStringExtra("key");int id=intent.getIntExtra("id",0);
         if(key==null||key.length()>2000||!(id==151||id==153&&PREVIEW.equals(key)))return;
-        if(CountdownDisplay.REFRESH.equals(intent.getAction())){
-            try{CountdownDisplay.refresh(c,key,id);}catch(RuntimeException ignored){}
+        if(NoticeCompat.OLD_REFRESH.equals(intent.getAction())){
+            // A pre-upgrade minute update must never overwrite the four-character title.
+            NoticeCompat.cancelOldRefresh(c,key,id);
             return;
         }
         // CourseReminder's durable sent journal already prevents re-posting after dismissal.

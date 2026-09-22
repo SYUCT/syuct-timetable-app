@@ -14,12 +14,17 @@ public final class NativeReminderProbe extends Activity {
     int checks;
     void check(boolean ok,String label){if(!ok)throw new AssertionError(label);checks++;}
     NotificationManager manager(){return getSystemService(NotificationManager.class);}
+    // NotificationManager IPC enqueues work; wait for the system, not a same-tick snapshot.
+    void awaitCount(int expected){
+        long until=SystemClock.elapsedRealtime()+3000;
+        while(manager().getActiveNotifications().length!=expected&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(20);
+    }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         if(!getPackageName().endsWith(".reminderprobe"))throw new SecurityException("Isolated QA package required");
         try{
             boolean blocked=getIntent().getBooleanExtra("blocked",false);
-            CourseReminder.enable(this,false);manager().cancelAll();CourseReminder.prefs(this).edit().clear().commit();
+            CourseReminder.enable(this,false);manager().cancelAll();awaitCount(0);CourseReminder.prefs(this).edit().clear().commit();
             LocalDate first=LocalDate.now(LessonClock.ZONE).with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)).plusWeeks(1);
             long start=first.atTime(13,30).atZone(LessonClock.ZONE).toInstant().toEpochMilli(),due=start-900000;
             JSONObject settings=new JSONObject().put("firstWeekDate",first.toString()).put("totalWeeks",20);
@@ -36,6 +41,7 @@ public final class NativeReminderProbe extends Activity {
             if(blocked){
                 check(!CourseReminder.notifications(this),"notification permission denied");
                 CourseReminder.schedule(this,due+300000,false);
+                awaitCount(1);
                 check(manager().getActiveNotifications().length==0,"blocked cannot send");
                 check(CourseReminder.prefs(this).getLong("scheduledAt",0)==0,"blocked cannot schedule");
                 check(CourseReminder.testNotification(this).contains("未允许"),"blocked test gives guidance");
@@ -49,20 +55,21 @@ public final class NativeReminderProbe extends Activity {
                 check(manager().getActiveNotifications().length==1,"reopening sends unsent reminder");
                 Notification actual=manager().getActiveNotifications()[0].getNotification();
                 check(actual.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("提醒测试课程"),"full course title");
-                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("开课时间：13:30；授课教师：测试教师；上课教室：测试教室"),"actual dispatched reminder has all four fields");
+                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("13:30 开课 · 点“查看详情”\n授课教师：测试教师\n上课教室：测试教室"),"actual dispatched reminder has all four fields");
                 check(actual.getTimeoutAfter()==600000,"late delivery expires at actual start");
                 long posted=manager().getActiveNotifications()[0].getPostTime();
                 String key=manager().getActiveNotifications()[0].getTag();
                 check(CourseReminder.prefs(this).getLong("scheduledAt",0)==due+7*86400000L,"next week reserved");
                 CourseReminder.schedule(this,due+310000,false);
                 check(manager().getActiveNotifications()[0].getPostTime()==posted,"reopen does not repeat");
-                manager().cancel(key,151);CourseReminder.schedule(this,due+320000,true);
+                manager().cancel(key,151);awaitCount(0);CourseReminder.schedule(this,due+320000,true);
                 check(manager().getActiveNotifications().length==0,"dismissed reminder stays dismissed even on forced rearm");
                 CourseReminder.prefs(this).edit().remove("sent").commit();CourseReminder.schedule(this,start,true);
                 check(manager().getActiveNotifications().length==0,"class already started is not sent");
                 CourseReminder.enable(this,false);
                 check(CourseReminder.prefs(this).getLong("scheduledAt",0)==0,"switch off clears appointment");
                 check(CourseReminder.testNotification(this).contains("已发送"),"explicit test works without enabling reminders");
+                awaitCount(1);
                 check(manager().getActiveNotifications().length==1,"test is a real notification");
                 check(!CourseReminder.enabled(this),"test does not enable reminders");
                 check(CourseReminder.prefs(this).getStringSet("sent",Set.of()).isEmpty(),"test does not mark courses sent");
