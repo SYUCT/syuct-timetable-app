@@ -7,7 +7,7 @@ import android.os.Build;
 import android.service.notification.StatusBarNotification;
 import java.util.List;
 
-/** Optional system-owned live countdown. No foreground service or refresh loop. */
+/** Optional live countdown. No foreground service; HyperOS has a minute-text fallback. */
 public final class LiveCourseNotice extends BroadcastReceiver {
     static final String END="top.syuct.timetable.END_LIVE_COURSE", PREVIEW="live_course_preview";
     static boolean enabled(Context c){return CourseReminder.prefs(c).getBoolean("liveCountdown",false);}
@@ -26,7 +26,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         if(!enabled(c))return "开启后，课前15分钟尝试显示系统倒计时；上课或关闭后结束。";
         return available(c)?"已开启。课前15分钟显示剩余倒计时；点开查看课程、时间、教师和教室。是否上岛及秒数样式由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
     }
-    static Notification build(Context c,Notification.Builder builder,String name,String key,int id,long start,long now){
+    static Notification build(Context c,Notification.Builder builder,String key,int id,long start,long now){
         CourseNoticeStyle.apply(c,builder);
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
         if(Build.VERSION.SDK_INT<36||!available(c))return builder.build();
@@ -36,7 +36,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
         // No fixed short text: SystemUI owns the ticking countdown from `when`.
         // Never restart at 15 minutes if delivery was late; target actual class start.
-        liveState(builder,endAction,end,start,now,available(c));
+        liveState(builder,endAction,end,start,now,true);
         Notification notice=builder.build();
         if(!notice.hasPromotableCharacteristics()){
             android.os.Bundle extras=new android.os.Bundle();
@@ -44,12 +44,12 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false).setShortCriticalText(null)
                 .setDeleteIntent(null).setActions(new Notification.Action[0]).build();
         }
-        return notice;
+        return NoticeCompat.xiaomi()?CountdownDisplay.apply(builder,start,now).build():notice;
     }
     static Notification.Builder liveState(Notification.Builder builder,Notification.Action action,PendingIntent end,long start,long now,boolean promoted){
         if(Build.VERSION.SDK_INT<36)return builder;
         // No unverified Xiaomi template can suppress the standard live state.
-        builder.getExtras().remove(XiaomiIsland.PARAM);
+        builder.getExtras().remove("miui.focus.param");
         builder.getExtras().remove("miui.focus.pics");
         builder.getExtras().remove("miui.focus.actions");
         // compileSdk 36 extras contract; the native setter is only in SDK 36.1.
@@ -61,8 +61,8 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static void cancelLive(Context c){
         NotificationManager manager=c.getSystemService(NotificationManager.class);
         for(StatusBarNotification n:manager.getActiveNotifications())
-            if(PREVIEW.equals(n.getTag())||n.getId()==151&&((n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0||VivoIsland.hasPayload(n.getNotification())||XiaomiIsland.hasPayload(n.getNotification())))
-                VivoIsland.cancel(c,n.getTag(),n.getId());
+            if(PREVIEW.equals(n.getTag())||n.getId()==151&&((n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0||NoticeCompat.legacy(n.getNotification())))
+                NoticeCompat.cancel(c,n.getTag(),n.getId());
     }
     static void reconcile(Context c,List<ReminderPlanner.Event> events,long now){
         NotificationManager manager=c.getSystemService(NotificationManager.class);
@@ -70,7 +70,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             if(n.getId()!=151)continue;
             boolean current=false;
             for(ReminderPlanner.Event e:events)if(e.key.equals(n.getTag())&&e.start>now){current=true;break;}
-            if(!current)VivoIsland.cancel(c,n.getTag(),n.getId());
+            if(!current)NoticeCompat.cancel(c,n.getTag(),n.getId());
         }
     }
     static String preview(Context c){
@@ -89,7 +89,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             NoticePreview sample=NoticePreview.sample(c);
             Notification.Builder builder=sample.builder(c,start,true).setOnlyAlertOnce(false);
             android.os.Bundle token=new android.os.Bundle();token.putLong("syuct.preview.target",start);builder.addExtras(token);
-            c.getSystemService(NotificationManager.class).notify(PREVIEW,153,build(c,builder,sample.name,PREVIEW,153,start,now));
+            post(c,PREVIEW,153,build(c,builder,PREVIEW,153,start,now));
             return new PreviewResult(start,"已发送预览请求，正在确认系统是否接收…");
         }catch(RuntimeException e){return new PreviewResult(0,"预览发送失败，请检查通知权限与声音设置。");}
     }
@@ -112,11 +112,22 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         }catch(InterruptedException e){Thread.currentThread().interrupt();return "预览确认已中断，可重新尝试。";}
         catch(RuntimeException e){return "预览请求已发送，但无法读取系统接收结果，请下拉通知栏核对。";}
     }
+    @android.annotation.SuppressLint("MissingPermission")
+    static void post(Context c,String key,int id,Notification notice){
+        c.getSystemService(NotificationManager.class).notify(key,id,notice);
+        // Failure to reserve a cosmetic refresh must never turn a delivered course
+        // reminder into an error/retry (and thus duplicate its alert).
+        try{CountdownDisplay.schedule(c,key,id,notice,System.currentTimeMillis());}catch(RuntimeException ignored){}
+    }
     @Override public void onReceive(Context c,Intent intent){
-        if(!END.equals(intent.getAction()))return;
+        if(!END.equals(intent.getAction())&&!CountdownDisplay.REFRESH.equals(intent.getAction()))return;
         String key=intent.getStringExtra("key");int id=intent.getIntExtra("id",0);
         if(key==null||key.length()>2000||!(id==151||id==153&&PREVIEW.equals(key)))return;
+        if(CountdownDisplay.REFRESH.equals(intent.getAction())){
+            try{CountdownDisplay.refresh(c,key,id);}catch(RuntimeException ignored){}
+            return;
+        }
         // CourseReminder's durable sent journal already prevents re-posting after dismissal.
-        VivoIsland.cancel(c,key,id);
+        NoticeCompat.cancel(c,key,id);
     }
 }

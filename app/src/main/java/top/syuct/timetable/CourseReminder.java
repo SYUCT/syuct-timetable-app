@@ -103,18 +103,17 @@ public final class CourseReminder extends BroadcastReceiver {
         for(ReminderPlanner.Event e:ReminderPlanner.pending(all,now,sent)){
             Intent open=new Intent(c,MainActivity.class).setAction(TodayWidget.OPEN).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent pi=PendingIntent.getActivity(c,170,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-            String time=CourseNoticeStyle.time(e.start);
-            String body=time+" 开课 · "+(e.course.room.isEmpty()?"地点待定":e.course.room);
+            String body=CourseNoticeStyle.details(e.start,e.course.teacher,e.course.room);
             Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
             Notification.Builder builder=new Notification.Builder(c,CHANNEL)
                 .setContentTitle(CourseNoticeStyle.title(e.course.name)).setContentText(body)
-                .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(CourseNoticeStyle.details(e.start,e.course.teacher,e.course.room)))
+                .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(body))
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
                 .setTimeoutAfter(e.start-now);
-            Notification notice=LiveCourseNotice.build(c,builder,e.course.name,e.key,151,e.start,now);
+            Notification notice=LiveCourseNotice.build(c,builder,e.key,151,e.start,now);
             try{
-                c.getSystemService(NotificationManager.class).notify(e.key,151,notice);sent.add(e.key);
+                LiveCourseNotice.post(c,e.key,151,notice);sent.add(e.key);
                 // Persist each event before the next one; stable tags also prevent duplicate entries.
                 p.edit().putStringSet("sent",new HashSet<>(sent)).commit();
             }catch(RuntimeException e1){p.edit().putString("deliveryError","通知未能发送，请检查系统通知权限后重新打开 App。").apply();}

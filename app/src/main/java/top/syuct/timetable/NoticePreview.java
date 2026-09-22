@@ -20,9 +20,9 @@ final class NoticePreview {
         PendingIntent pi=PendingIntent.getActivity(c,173,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         String detail=CourseNoticeStyle.details(start,teacher,room);
         return new Notification.Builder(c,CourseReminder.CHANNEL)
-            .setContentTitle(CourseNoticeStyle.title("预览·"+name)).setContentText(location()+" · "+(countdown?"15分钟效果预览":"通知效果预览"))
+            .setContentTitle(CourseNoticeStyle.title("预览·"+name)).setContentText(detail)
             .setStyle(new Notification.BigTextStyle().setBigContentTitle("效果预览｜"+name)
-                .bigText(detail+"\n"+(countdown?"演示开课时间：从现在起15分钟，不是实际课程时间。":"仅为样式预览，开课时间为演示时间。")))
+                .bigText(detail+"。（演示时间，非实际开课时间）"))
             .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setPublicVersion(CourseNoticeStyle.apply(c,new Notification.Builder(c,CourseReminder.CHANNEL)).setContentTitle("提醒效果预览").setContentText("解锁查看预览内容").build())
             .setTimeoutAfter(countdown?ReminderPlanner.LEAD:60000);

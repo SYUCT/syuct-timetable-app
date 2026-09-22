@@ -60,7 +60,7 @@ public final class PreviewButtonProbe extends Activity {
                 Notification first=current().getNotification();long target=first.extras.getLong("syuct.preview.target");
                 check(target>System.currentTimeMillis(),"this preview has future token");
                 check(first.getTimeoutAfter()==ReminderPlanner.LEAD,"fifteen minute system expiry");
-                check(!XiaomiIsland.hasPayload(first),"actual button does not select unverified native template");
+                check(!NoticeCompat.legacy(first),"actual button does not select unverified native template");
                 check((first.flags&Notification.FLAG_ONLY_ALERT_ONCE)==0,"explicit repeat preview can alert again");
                 check(!CourseReminder.enabled(this),"preview does not enable real reminders");
                 check(CourseReminder.prefs(this).getStringSet("sent",java.util.Collections.emptySet()).isEmpty(),"preview does not mark real courses sent");

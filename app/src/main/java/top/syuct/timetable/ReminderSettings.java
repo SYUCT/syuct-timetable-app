@@ -66,11 +66,11 @@ final class ReminderSettings extends Dialog {
         LinearLayout exact=card(content);precise=toggle("准时提醒");exact.addView(precise);
         precision=text("",14,BLUE,false);add(exact,precision,6);
         add(exact,text("只在提醒时唤醒。系统权限名为“闹钟和提醒”，不会添加时钟闹钟，也不会持续响铃。",14,MUTED,false),8);
-        authorize=button("去授权准时提醒",false,this::requestExact);add(exact,authorize,12);
+        authorize=button("闹钟和提醒权限",false,this::requestExact);authorize.setTag("exact-permission");add(exact,authorize,12);
         LinearLayout island=card(content);live=toggle("课前实时倒计时");island.addView(live);
         add(island,text("试验功能 · 展示样式由手机系统决定",12,BLUE,false),4);
         liveStatus=text("",14,MUTED,false);add(island,liveStatus,6);
-        add(island,text("岛内仅显示距离开课的倒计时，不显示课程名或开课时刻。点开查看课程、时间、教师和教室。使用系统通用通知，不接入厂商 App ID；是否上岛及显示分秒还是分钟由系统决定。",13,MUTED,false),8);
+        add(island,text("点开查看课程、时间、教师和教室。小米尝试显示剩余分钟数，静默刷新；省电休眠期间可能延迟，展开卡片的系统计时仍按开课时间计算。不接入厂商 App ID，不新增权限或常驻服务；是否上岛由系统决定。",13,MUTED,false),8);
         LinearLayout preview=card(content);preview.addView(text("看看提醒长什么样",18,INK,true));
         NoticePreview sample=NoticePreview.sample(activity);
         add(preview,text(sample.source(),13,MUTED,false),8);
@@ -127,7 +127,10 @@ final class ReminderSettings extends Dialog {
         master.setChecked(CourseReminder.enabled(activity));precise.setChecked(ExactReminder.requested(activity));
         live.setChecked(LiveCourseNotice.enabled(activity));live.setEnabled(!previewBusy&&LiveCourseNotice.supported());
         plan.setText(CourseReminder.status(activity));precision.setText(ExactReminder.status(activity));liveStatus.setText(LiveCourseNotice.status(activity));
-        authorize.setVisibility(ExactReminder.requested(activity)&&!ExactReminder.permitted(activity)?View.VISIBLE:View.GONE);
+        // Keep the system permission entry discoverable even when the feature is
+        // off or permission is already granted. Opening settings is not opt-in.
+        authorize.setVisibility(View.VISIBLE);authorize.setEnabled(Build.VERSION.SDK_INT>=31);
+        authorize.setText(Build.VERSION.SDK_INT<31?"当前系统无需单独授权":ExactReminder.permitted(activity)?"闹钟和提醒权限（已允许）":"闹钟和提醒权限（去授权）");
         livePreview.setVisibility(LiveCourseNotice.supported()?View.VISIBLE:View.GONE);refreshing=false;
     }
     private void explainExact(){
@@ -137,7 +140,7 @@ final class ReminderSettings extends Dialog {
             .setPositiveButton("去授权",(d,w)->requestExact()).show();
     }
     private void requestExact(){
-        if(Build.VERSION.SDK_INT<31||ExactReminder.permitted(activity)){CourseReminder.schedule(activity);refresh();return;}
+        if(Build.VERSION.SDK_INT<31){refresh();return;}
         try{activity.startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+activity.getPackageName())));}
         catch(ActivityNotFoundException|SecurityException e){precision.setText("无法直达授权页。请到系统设置 → 应用 → 特殊权限 → 闹钟和提醒中允许化大课表。");}
     }

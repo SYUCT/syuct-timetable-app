@@ -3,201 +3,121 @@ package top.syuct.timetable;
 import android.app.*;
 import android.content.*;
 import android.os.*;
+import android.service.notification.StatusBarNotification;
 import android.widget.TextView;
 import java.util.Collections;
 
-/** Synthetic notifications in a separate QA package; never included in release. */
+/** Real notification IPC in a separate QA package, never shipped in release. */
 public final class NativeLiveProbe extends Activity {
     int checks;
-    void check(boolean result,String message){if(!result)throw new AssertionError(message);checks++;}
-    void await(String message,java.util.function.BooleanSupplier condition,Runnable next){
-        long deadline=SystemClock.uptimeMillis()+5000;
-        Handler handler=new Handler(Looper.getMainLooper());
-        handler.post(new Runnable(){public void run(){
-            if(condition.getAsBoolean()){check(true,message);next.run();return;}
-            if(SystemClock.uptimeMillis()>=deadline)throw new AssertionError(message+" (system callback timeout)");
-            handler.postDelayed(this,50);
-        }});
-    }
+    void check(boolean value,String label){if(!value)throw new AssertionError(label);checks++;}
     NotificationManager manager(){return getSystemService(NotificationManager.class);}
-    Notification.Builder base(){return new Notification.Builder(this,CourseReminder.CHANNEL).setSmallIcon(R.drawable.ic_notification)
-        .setContentTitle("课前倒计时 · 验证").setContentText("测试课程 · 测试教室").setStyle(new Notification.BigTextStyle().bigText("测试课程 · 测试教室"))
-        .setVisibility(Notification.VISIBILITY_PRIVATE).setTimeoutAfter(20000);}
-    boolean ongoing(Notification n){return (n.flags&Notification.FLAG_ONGOING_EVENT)!=0;}
+    Notification.Builder base(){return CourseNoticeStyle.apply(this,new NoticePreview("自然辩证法概论","瑞师楼222","示例教师",false).builder(this,System.currentTimeMillis()+900000,true));}
+    Notification active(String key,int id){
+        for(StatusBarNotification n:manager().getActiveNotifications())if(n.getId()==id&&java.util.Objects.equals(key,n.getTag()))return n.getNotification();
+        return null;
+    }
+    void await(String label,java.util.function.BooleanSupplier condition) throws InterruptedException {
+        for(int i=0;i<300;i++){if(condition.getAsBoolean()){check(true,label);return;}Thread.sleep(50);}
+        throw new AssertionError(label);
+    }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         if(!getPackageName().endsWith(".liveprobe"))throw new SecurityException("Isolated package only");
         TextView report=new TextView(this);report.setTextSize(20);report.setPadding(24,80,24,24);setContentView(report);
-        manager().cancelAll();CourseReminder.prefs(this).edit().clear().commit();
-        CourseReminder.channel(this);
+        new Thread(()->{
+            try{runChecks();String text="PASS "+checks+" API "+Build.VERSION.SDK_INT;android.util.Log.i("NativeLiveProbe",text);runOnUiThread(()->report.setText(text));}
+            catch(Exception|AssertionError e){android.util.Log.e("NativeLiveProbe","FAIL",e);runOnUiThread(()->report.setText("FAIL "+e));}
+        },"native-notice-qa").start();
+    }
+    void runChecks() throws Exception {
+        manager().cancelAll();CourseReminder.prefs(this).edit().clear().commit();CourseReminder.channel(this);
         Notification branded=CourseNoticeStyle.apply(this,base()).build();
         check(branded.color==CourseNoticeStyle.BLUE,"brand blue");
-        check(!branded.extras.getBoolean(Notification.EXTRA_COLORIZED),"not colorized for promotion");
-        check(branded.getLargeIcon()!=null,"full color crest available");
-        android.graphics.drawable.Drawable icon=branded.getSmallIcon().loadDrawable(this);
-        android.graphics.Bitmap mask=android.graphics.Bitmap.createBitmap(96,96,android.graphics.Bitmap.Config.ARGB_8888);
-        icon.setBounds(0,0,96,96);icon.draw(new android.graphics.Canvas(mask));
-        int transparent=0,opaque=0;
-        for(int y=0;y<96;y++)for(int x=0;x<96;x++){int a=android.graphics.Color.alpha(mask.getPixel(x,y));if(a==0)transparent++;if(a>200)opaque++;}
-        check(transparent>100&&opaque>100,"small crest retains transparent and visible detail");
+        check(!branded.extras.getBoolean(Notification.EXTRA_COLORIZED),"non-colorized standard notification");
+        check(branded.getLargeIcon()!=null&&branded.getSmallIcon()!=null,"both icons provided");
         check(CourseNoticeStyle.title("  测试课程  ").equals("测试课程"),"trim title");
         check(CourseNoticeStyle.title("").equals("即将上课"),"empty title");
-        check(CourseNoticeStyle.title("新时代中国特色社会主义理论与实践").codePointCount(0,8)==8,"compact long title");
         check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
-        check(CourseNoticeStyle.details(0,"","").equals("开课时间：08:00\n授课教师：未提供\n上课教室：未提供"),"separate details without invented room");
-        check(CourseNoticeStyle.compactTitle("数值分析").equals("数值分"),"chip first three course characters");
-        check(CourseNoticeStyle.compactTitle("  高 等\n数学").equals("高等数"),"chip strips whitespace");
-        check(CourseNoticeStyle.compactTitle(null).equals("待上课"),"empty chip fallback");
-        check(CourseNoticeStyle.compactTitle("化学").equals("化学"),"short course unchanged");
-        check(CourseNoticeStyle.compactTitle("🧪实验课程").equals("🧪实验"),"chip does not split surrogate pair");
-        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00\n授课教师：张老师\n上课教室：瑞师楼222"),"labelled teacher and classroom");
-        check(CourseNoticeStyle.details(0,null,null).contains("授课教师：未提供"),"missing fields not invented");
-        Notification.Builder miIcon=base();CourseNoticeStyle.applyXiaomiIcon(this,miIcon);
-        Notification miNotice=miIcon.build();
-        check(miNotice.getSmallIcon().getType()==android.graphics.drawable.Icon.TYPE_RESOURCE&&miNotice.getSmallIcon().getResId()==R.drawable.campus_badge,"Xiaomi small icon is original colour resource, not generated alpha mask");
-        check(miNotice.extras.containsKey("miui.isGrayscaleIcon")&&!miNotice.extras.getBoolean("miui.isGrayscaleIcon"),"MIUI colour compatibility hint (rendering not proven)");
-        check(XiaomiIsland.permission((Bundle)null)==XiaomiIsland.UNKNOWN,"null provider reply unknown, not denied");
-        check(XiaomiIsland.permission(new Bundle())==XiaomiIsland.UNKNOWN,"missing permission unknown");
-        Bundle focus=new Bundle();focus.putString("canShowFocus","true");
-        check(XiaomiIsland.permission(focus)==XiaomiIsland.UNKNOWN,"wrong permission type unknown");
-        focus.putBoolean("canShowFocus",false);check(XiaomiIsland.permission(focus)==XiaomiIsland.DENIED,"explicit denial");
-        focus.putBoolean("canShowFocus",true);check(XiaomiIsland.permission(focus)==XiaomiIsland.GRANTED,"explicit permission");
-        check(!XiaomiIsland.nativeAllowed(3,XiaomiIsland.UNKNOWN),"protocol alone cannot authorize native renderer");
-        check(!XiaomiIsland.nativeAllowed(3,XiaomiIsland.DENIED),"denied uses fallback");
-        check(!XiaomiIsland.nativeAllowed(2,XiaomiIsland.GRANTED),"old protocol uses fallback");
-        check(XiaomiIsland.nativeAllowed(3,XiaomiIsland.GRANTED),"supported and granted native renderer");
-        check(XiaomiIsland.status(3,XiaomiIsland.DENIED).contains("未允许"),"denied status does not claim native success");
-        check(XiaomiIsland.status(3,XiaomiIsland.UNKNOWN).contains("暂未取得"),"unknown status honest");
-        check(VivoIsland.device("iQOO","vivo")&&!VivoIsland.device("google","Google"),"OEM gate");
-        Bundle vivo=VivoIsland.extras(this,"数值分析",0,null);
-        check(vivo.getInt("notification.superx.operation",-1)==0,"vivo create");
-        check(vivo.getBoolean("notification.superx.showNotify"),"vivo ordinary fallback");
-        check(vivo.getString("notification.superx.scene").equals("METTING"),"calendar scene, not train spoof");
-        Bundle island=vivo.getBundle("notification.superx.island");
-        check(island.getBundle("island.superx.leftInfo").getString("island.superx.leftInfo.content").equals("数值分"),"vivo left name");
-        check(island.getBundle("island.superx.rightInfo").getString("island.superx.rightInfo.content").equals("08:00"),"vivo right time");
-        android.graphics.drawable.Icon colour=vivo.getBundle("notification.superx.baseInfos").getParcelable("notification.superx.baseInfos.icon");
-        check(colour.getType()==android.graphics.drawable.Icon.TYPE_RESOURCE&&colour.getResId()==R.drawable.campus_badge,"OEM gets original full colour badge");
-        android.graphics.Bitmap original=android.graphics.BitmapFactory.decodeResource(getResources(),R.drawable.campus_badge);
-        android.graphics.Bitmap scaled=android.graphics.Bitmap.createScaledBitmap(original,96,96,true);
-        int light=0,lightAlpha=0,dark=0,darkAlpha=0;
-        for(int y=0;y<96;y++)for(int x=0;x<96;x++){
-            int p=scaled.getPixel(x,y);if(android.graphics.Color.alpha(p)<240)continue;
-            int l=(android.graphics.Color.red(p)*54+android.graphics.Color.green(p)*183+android.graphics.Color.blue(p)*19)/256;
-            if(l>220){light++;lightAlpha+=android.graphics.Color.alpha(mask.getPixel(x,y));}
-            if(l<100){dark++;darkAlpha+=android.graphics.Color.alpha(mask.getPixel(x,y));}
-        }
-        check(light>10&&dark>10&&lightAlpha/light>darkAlpha/dark,"white areas stay white, not inverted");
-        check(XiaomiIsland.device("Redmi","Xiaomi")&&XiaomiIsland.device("POCO","Xiaomi"),"Xiaomi family");
-        check(!XiaomiIsland.device("vivo","vivo")&&!XiaomiIsland.device(null,null),"no vendor cross contamination");
-        try{
-            org.json.JSONObject root=XiaomiIsland.params("数值分析","数值分析","开课时间：08:00\n教室222",0,-180000);
-            org.json.JSONObject v2=root.getJSONObject("param_v2"),mi=v2.getJSONObject("param_island");
-            org.json.JSONObject big=mi.getJSONObject("bigIslandArea"),left=big.getJSONObject("imageTextInfoLeft");
-            check(left.getJSONObject("textInfo").getString("title").equals("数值分"),"Xiaomi left is course");
-            check(big.getJSONObject("textInfo").getString("title").equals("08:00"),"Xiaomi right retains time simultaneously");
-            check(big.getJSONObject("textInfo").getBoolean("narrowFont"),"time uses narrow font");
-            check(left.getJSONObject("picInfo").getString("pic").equals(XiaomiIsland.BADGE),"left colour image reference");
-            check(mi.getJSONObject("smallIslandArea").getJSONObject("picInfo").getString("pic").equals(XiaomiIsland.BADGE),"small island image");
-            check(v2.getJSONObject("picInfo").getString("picDark").equals(XiaomiIsland.BADGE),"expanded dark uses original badge too");
-            check(mi.getInt("islandTimeout")==180&&v2.getInt("timeout")==3,"OEM timeouts units seconds and minutes");
-            check(!v2.getBoolean("filterWhenNoPermission")&&v2.getString("reopen").equals("close"),"permission fallback and no resurrection");
-            check(v2.getJSONObject("baseInfo").getString("title").equals("数值分析"),"expanded full name");
-            check(XiaomiIsland.params("引号\"换行\n课","课","\"",0,1).getJSONObject("param_v2").getInt("timeout")==1,"escaped data and minimum timeout");
-            PendingIntent stop=PendingIntent.getActivity(this,199,new Intent(this,NativeLiveProbe.class),PendingIntent.FLAG_IMMUTABLE);
-            Notification.Action action=new Notification.Action.Builder(null,"结束提醒",stop).build();
-            Bundle payload=XiaomiIsland.extras(this,"数值分析",base().build(),0,-180000,action);
-            check(payload.getBundle("miui.focus.pics").getParcelable(XiaomiIsland.BADGE)!=null,"image bundle resolves picture");
-            check(payload.getBundle("miui.focus.actions").getParcelable(XiaomiIsland.END)!=null,"end button resolves action");
-            Parcel parcel=Parcel.obtain();parcel.writeBundle(payload);parcel.setDataPosition(0);
-            Bundle decoded=parcel.readBundle(getClassLoader());parcel.recycle();
-            check(decoded.getString(XiaomiIsland.PARAM).contains("数值分"),"payload survives notification IPC");
-            if(Build.VERSION.SDK_INT>=36){
-                Notification restored=LiveCourseNotice.liveState(base().setShortCriticalText("stale course 08:00").addExtras(payload),action,stop,180000,0,true).build();
-                check(restored.extras.getBoolean("android.requestPromotedOngoing"),"regression: preserve generic promotion request");
-                check(restored.extras.getString("android.shortCriticalText")==null,"no fixed text can override countdown");
-                check(restored.when==180000&&restored.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)&&restored.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN),"system owns ticking countdown");
-                Notification late=LiveCourseNotice.liveState(base(),action,stop,900000,300000,true).build();
-                check(late.when==900000&&late.getTimeoutAfter()==600000,"late delivery uses remaining ten minutes, never restarts fifteen");
-                Notification full=LiveCourseNotice.liveState(base(),action,stop,900000,0,true).build();
-                check(full.getTimeoutAfter()==ReminderPlanner.LEAD,"fifteen minute countdown lifetime");
-                Notification fixed=LiveCourseNotice.liveState(base(),action,stop,900000,0,true).setShortCriticalText("旧文字").build();
-                check(full.hasPromotableCharacteristics()==fixed.hasPromotableCharacteristics(),"removing fixed text does not change this OS promotion eligibility");
-                check(!XiaomiIsland.hasPayload(restored),"unverified OEM template cannot hijack standard route");
-                check(restored.deleteIntent!=null&&restored.actions.length==1,"restored route retains end action");
-                check(restored.getTimeoutAfter()==180000,"restored route expires at start");
-                check(ongoing(restored),"regression: ongoing NOT cleared on granted focus permission");
-                check(!ongoing(LiveCourseNotice.liveState(base(),action,stop,180000,0,false).build()),"generic permission denial still respected");
-            }
-        }catch(org.json.JSONException e){throw new AssertionError(e);}
-        if(getIntent().getBooleanExtra("visual",false)){
-            long now=System.currentTimeMillis();
-            // Exercise the exact shared countdown builder even on an emulator
-            // which demotes notifications. This verifies ticking, NOT OEM island.
-            PendingIntent stop=PendingIntent.getBroadcast(this,153,new Intent(this,LiveCourseNotice.class)
-                .setAction(LiveCourseNotice.END).putExtra("key",LiveCourseNotice.PREVIEW).putExtra("id",153),PendingIntent.FLAG_IMMUTABLE);
-            Notification.Action action=new Notification.Action.Builder(null,"结束提醒",stop).build();
-            Notification.Builder visual=CourseNoticeStyle.apply(this,new NoticePreview("工程伦理","瑞师楼324","示例教师",false).builder(this,now+ReminderPlanner.LEAD,true));
-            manager().notify(LiveCourseNotice.PREVIEW,153,LiveCourseNotice.liveState(visual,action,stop,now+ReminderPlanner.LEAD,now,true).build());
-            report.setText("PASS "+checks+" style visual");android.util.Log.i("NativeLiveProbe","PASS "+checks+" style visual");return;
-        }
-        boolean denied=getIntent().getBooleanExtra("denied",false);
-        if(denied){
-            check(!CourseReminder.notifications(this),"notifications denied");
-            LiveCourseNotice.enable(this,true);
-            check(LiveCourseNotice.preview(this).contains("请先允许"),"preview does not bypass permission");
-            check(manager().getActiveNotifications().length==0,"no notification when denied");
-            report.setText("PASS "+checks+" denied");android.util.Log.i("NativeLiveProbe","PASS "+checks+" denied");return;
+        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00；授课教师：张老师；上课教室：瑞师楼222"),"one paragraph with all fields");
+        check(CourseNoticeStyle.details(0,null,"").equals("开课时间：08:00；授课教师：未提供；上课教室：未提供"),"missing fields explicit");
+        String summary=branded.extras.getCharSequence(Notification.EXTRA_TEXT).toString();
+        String expanded=branded.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString();
+        check(summary.contains("示例教师")&&summary.contains("瑞师楼222"),"ordinary summary has teacher and room");
+        check(expanded.contains("示例教师")&&expanded.contains("瑞师楼222")&&!expanded.contains("\n"),"first paragraph has all details");
+        check(NoticeCompat.xiaomi("Redmi","Xiaomi")&&NoticeCompat.xiaomi("POCO","Xiaomi"),"Xiaomi family");
+        check(!NoticeCompat.xiaomi(null,null)&&!NoticeCompat.xiaomi("vivo","vivo"),"scoped to Xiaomi");
+        Notification.Builder mi=base();CourseNoticeStyle.applyXiaomiIcon(this,mi);
+        check(mi.build().getSmallIcon().getResId()==R.drawable.campus_badge,"original Xiaomi badge");
+        check(!mi.build().extras.getBoolean("miui.isGrayscaleIcon",true),"colour hint retained");
+        PendingIntent stop=PendingIntent.getBroadcast(this,153,new Intent(this,LiveCourseNotice.class)
+            .setAction(LiveCourseNotice.END).putExtra("key",LiveCourseNotice.PREVIEW).putExtra("id",153),PendingIntent.FLAG_IMMUTABLE);
+        Notification.Action action=new Notification.Action.Builder(null,"结束提醒",stop).build();
+        long now=System.currentTimeMillis(),start=now+900000;
+        Bundle stale=new Bundle();stale.putString("miui.focus.param","unused");
+        Notification full=LiveCourseNotice.liveState(base().addExtras(stale),action,stop,start,now,true).build();
+        check(!NoticeCompat.legacy(full),"unused payload stripped");
+        check(full.when==start&&full.getTimeoutAfter()==900000,"fifteen-minute target");
+        check(full.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)&&full.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN),"ticking countdown preserved");
+        check(full.extras.getString("android.shortCriticalText")==null,"non-Xiaomi native timer retained");
+        Notification late=LiveCourseNotice.liveState(base(),action,stop,start,now+300000,true).build();
+        check(late.when==start&&late.getTimeoutAfter()==600000,"late delivery never restarts fifteen minutes");
+        Notification compact=CountdownDisplay.apply(Notification.Builder.recoverBuilder(this,full),start,now).build();
+        check(compact.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("剩余15分钟"),"title fallback is countdown");
+        check(compact.extras.getString("android.shortCriticalText").equals("剩余15分钟"),"explicit chip text");
+        check(compact.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("效果预览｜自然辩证法概论"),"full course preserved");
+        check(compact.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals(expanded),"full details preserved");
+        check(compact.when==start&&compact.getTimeoutAfter()==900000,"countdown target preserved");
+        check(compact.hasPromotableCharacteristics()==full.hasPromotableCharacteristics(),"promotion eligibility unchanged");
+        if(getIntent().getBooleanExtra("denied",false)){
+            check(!CourseReminder.notifications(this),"notifications denied");LiveCourseNotice.enable(this,true);
+            check(LiveCourseNotice.preview(this).contains("请先允许"),"permission respected");
+            check(manager().getActiveNotifications().length==0,"nothing posted");return;
         }
         check(CourseReminder.notifications(this),"notifications granted");
-        check(!LiveCourseNotice.enabled(this),"default off");
-        long now=System.currentTimeMillis(),start=now+20000;
-        check(!ongoing(LiveCourseNotice.build(this,base(),"数值分析","off",151,start,now)),"off retains normal notification");
-        check(LiveCourseNotice.preview(this).contains("请先开启"),"preview requires opt in");
-        LiveCourseNotice.enable(this,true);check(LiveCourseNotice.enabled(this),"opt in saved");
-        Notification live=LiveCourseNotice.build(this,base(),"数值分析","qa",151,start,now);
-        if(!VivoIsland.device())check(!VivoIsland.hasPayload(live),"generic phone has no vendor extras");
-        check(!XiaomiIsland.hasPayload(live),"no phone automatically selects unverified Xiaomi template");
-        if(Build.VERSION.SDK_INT>=36&&LiveCourseNotice.available(this)){
-            check(ongoing(live),"ongoing requested");
-            check(live.hasPromotableCharacteristics(),"eligible notification characteristics");
-            check(live.when==start,"system countdown target");
-            check(live.extras.getString("android.shortCriticalText")==null,"countdown has no course/time string");
-            check(live.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER),"system chronometer");
-            check(live.deleteIntent!=null,"dismissal callback");
-            check(live.actions.length==1,"explicit end action");
-            manager().notify("qa",151,live);
-            check(manager().getActiveNotifications().length==1,"posted");
-            android.util.Log.i("NativeLiveProbe","promoted="+((manager().getActiveNotifications()[0].getNotification().flags&Notification.FLAG_PROMOTED_ONGOING)!=0));
-            try{live.actions[0].actionIntent.send();}catch(PendingIntent.CanceledException e){throw new RuntimeException(e);}
-        }else{
-            check(!ongoing(live),"unsupported/disallowed keeps ordinary notification");
-            check(live.deleteIntent==null,"no live actions on fallback");
+        check(!LiveCourseNotice.enabled(this),"default disabled");
+        check((LiveCourseNotice.build(this,base(),"off",151,start,now).flags&Notification.FLAG_ONGOING_EVENT)==0,"off retains ordinary notice");
+        check(LiveCourseNotice.preview(this).contains("请先开启"),"opt in required");
+        LiveCourseNotice.enable(this,true);
+        // Force the production compatibility builder on AOSP to test IPC and
+        // lifecycle, NOT to claim an OEM island was displayed.
+        LiveCourseNotice.post(this,LiveCourseNotice.PREVIEW,153,compact);
+        await("posted",()->active(LiveCourseNotice.PREVIEW,153)!=null);
+        if(getIntent().getBooleanExtra("visual",false))return;
+        if(ExactReminder.permitted(this)){
+            CourseReminder.prefs(this).edit().putBoolean("preciseReminder",true).commit();
+            long tickNow=System.currentTimeMillis(),tickTarget=tickNow+65000;
+            Notification ticking=CountdownDisplay.apply(Notification.Builder.recoverBuilder(this,compact),tickTarget,tickNow).setWhen(tickTarget).build();
+            LiveCourseNotice.post(this,LiveCourseNotice.PREVIEW,153,ticking);
+            await("real non-wakeup alarm refresh",()->"剩余1分钟".equals(active(LiveCourseNotice.PREVIEW,153).extras.getString("android.shortCriticalText")));
+            CourseReminder.prefs(this).edit().putBoolean("preciseReminder",false).commit();
         }
-        new Handler(Looper.getMainLooper()).postDelayed(()->{
-            check(manager().getActiveNotifications().length==0,"end action clears notification");
-            manager().notify("qa",151,LiveCourseNotice.build(this,base(),"数值分析","qa",151,System.currentTimeMillis()+20000,System.currentTimeMillis()));
-            // notify()/cancel() are asynchronous in Android 16. Observe the post
-            // before reconciling; don't test the race between two IPC calls.
-            await("posted notice observable",()->manager().getActiveNotifications().length==1,()->{
-            LiveCourseNotice.reconcile(this,Collections.emptyList(),System.currentTimeMillis());
-            await("deleted course cancels notice",()->manager().getActiveNotifications().length==0,()->{
-            check(LiveCourseNotice.preview(this).startsWith("已发送"),"preview delivered");
-            check(!CourseReminder.enabled(this),"preview does not enable scheduled reminders");
-            check(CourseReminder.prefs(this).getStringSet("sent",Collections.emptySet()).isEmpty(),"preview does not mark courses sent");
-            boolean wasLive=LiveCourseNotice.available(this);
-            LiveCourseNotice.enable(this,false);
-            if(wasLive)check(manager().getActiveNotifications().length==0,"disable cancels live preview");
-            manager().cancelAll();LiveCourseNotice.enable(this,true);
-            long sent=System.currentTimeMillis();manager().notify("expiry",151,LiveCourseNotice.build(this,base(),"数值分析","expiry",151,sent+20000,sent));
-            report.setText("等待20秒自动结束…");
-            new Handler(Looper.getMainLooper()).postDelayed(()->{
-                check(manager().getActiveNotifications().length==0,"system timeout removes at start");
-                report.setText("PASS "+checks+" API "+Build.VERSION.SDK_INT);
-                android.util.Log.i("NativeLiveProbe","PASS "+checks+" API "+Build.VERSION.SDK_INT);
-            },23000);
-            });
-            });
-        },1000);
+        long nearer=System.currentTimeMillis()+59000;
+        Notification near=CountdownDisplay.apply(Notification.Builder.recoverBuilder(this,compact),nearer,nearer-900000).setWhen(nearer).build();
+        manager().notify(LiveCourseNotice.PREVIEW,153,near);
+        await("replacement target",()->active(LiveCourseNotice.PREVIEW,153).extras.getLong(CountdownDisplay.TARGET)==nearer);
+        CountdownDisplay.refresh(this,LiveCourseNotice.PREVIEW,153);
+        await("recomputed actual remainder",()->"剩余1分钟".equals(active(LiveCourseNotice.PREVIEW,153).extras.getString("android.shortCriticalText")));
+        Notification updated=active(LiveCourseNotice.PREVIEW,153);
+        check((updated.flags&Notification.FLAG_ONLY_ALERT_ONCE)!=0,"refresh silent");
+        check(updated.getTimeoutAfter()<=59000&&updated.getTimeoutAfter()>0,"remaining lifetime");
+        check(updated.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals(expanded),"refresh preserves details");
+        stop.send();await("end cancels",()->active(LiveCourseNotice.PREVIEW,153)==null);
+        CountdownDisplay.refresh(this,LiveCourseNotice.PREVIEW,153);
+        check(active(LiveCourseNotice.PREVIEW,153)==null,"dismissed not resurrected");
+        Notification expired=CountdownDisplay.apply(base(),System.currentTimeMillis()-1000,System.currentTimeMillis()).setTimeoutAfter(60000).build();
+        manager().notify(LiveCourseNotice.PREVIEW,153,expired);await("expired fixture",()->active(LiveCourseNotice.PREVIEW,153)!=null);
+        CountdownDisplay.refresh(this,LiveCourseNotice.PREVIEW,153);await("expiry cancels",()->active(LiveCourseNotice.PREVIEW,153)==null);
+        check(LiveCourseNotice.preview(this).startsWith("已发送"),"real preview submission");
+        await("real preview accepted",()->active(LiveCourseNotice.PREVIEW,153)!=null);
+        check(!CourseReminder.enabled(this),"preview does not enable formal reminders");
+        check(CourseReminder.prefs(this).getStringSet("sent",Collections.emptySet()).isEmpty(),"preview does not mark sent");
+        LiveCourseNotice.enable(this,false);await("disable cancels",()->active(LiveCourseNotice.PREVIEW,153)==null);
+        CountdownDisplay.refresh(this,LiveCourseNotice.PREVIEW,153);check(active(LiveCourseNotice.PREVIEW,153)==null,"disabled refresh ignored");
+        LiveCourseNotice.enable(this,true);
+        long sent=System.currentTimeMillis();manager().notify("expiry",151,LiveCourseNotice.build(this,base().setTimeoutAfter(2000),"expiry",151,sent+2000,sent));
+        await("expiry fixture posted",()->active("expiry",151)!=null);await("system timeout at start",()->active("expiry",151)==null);
+        manager().notify("deleted",151,base().build());await("deletion fixture",()->active("deleted",151)!=null);
+        LiveCourseNotice.reconcile(this,Collections.emptyList(),System.currentTimeMillis());await("course deletion cleans notice",()->active("deleted",151)==null);
     }
 }

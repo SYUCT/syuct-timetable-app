@@ -38,7 +38,7 @@ public final class NativeExactProbe extends Activity {
             CourseReminder.schedule(this);check(CourseReminder.prefs(this).getBoolean("scheduledExact",false)==granted,"reopen preserves mode");
             NoticePreview p=NoticePreview.sample(this);check(p.borrowed&&p.name.equals("现代设计方法"),"preview borrows next course");
             Notification n=p.builder(this,System.currentTimeMillis()+180000,true).build();
-            check(n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("不是实际课程时间"),"synthetic time labelled");
+            check(n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("非实际开课时间"),"synthetic time labelled");
             check(n.publicVersion!=null&&!n.publicVersion.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains(p.name),"locked preview redacted");
             CourseReminder.testNotification(this);check(saved.equals(getSharedPreferences("timetable",0).getString("state","")),"preview preserves timetable");
             check(CourseReminder.prefs(this).getStringSet("sent",Set.of()).isEmpty(),"preview leaves sent journal untouched");

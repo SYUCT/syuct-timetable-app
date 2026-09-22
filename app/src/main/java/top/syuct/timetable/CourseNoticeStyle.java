@@ -21,7 +21,7 @@ final class CourseNoticeStyle {
         int[] pixels=new int[96*96];scaled.getPixels(pixels,0,96,0,0,96,96);
         // System small icons are alpha masks, not colour images. Preserve the white
         // paper/ring as the foreground instead of inverting the dark artwork.
-        // Full-colour OEM templates must use badgeIcon(), never this fallback mask.
+        // Colour-capable surfaces use badgeIcon(), never this fallback mask.
         for(int i=0;i<pixels.length;i++){
             int p=pixels[i],luma=(Color.red(p)*54+Color.green(p)*183+Color.blue(p)*19)/256;
             int strength=Math.max(0,Math.min(255,(luma-40)*255/200));
@@ -37,26 +37,22 @@ final class CourseNoticeStyle {
         builder.setSmallIcon(smallIcon(context))
             .setLargeIcon(badgeIcon(context))
             .setColor(BLUE).setColorized(false);
-        if(XiaomiIsland.device())applyXiaomiIcon(context,builder);
+        if(NoticeCompat.xiaomi())applyXiaomiIcon(context,builder);
         return builder;
     }
-    // MIUI compatibility hint, not an Android colour-icon guarantee. Keep it
-    // Xiaomi-only; the official focus template also uses the original resource.
+    // MIUI compatibility hint, not an Android colour-icon guarantee.
     static void applyXiaomiIcon(Context context,Notification.Builder builder){
         android.os.Bundle extras=new android.os.Bundle();extras.putBoolean("miui.isGrayscaleIcon",false);
         builder.setSmallIcon(badgeIcon(context)).addExtras(extras);
     }
     static String time(long start){return Instant.ofEpochMilli(start).atZone(LessonClock.ZONE).format(DateTimeFormatter.ofPattern("HH:mm"));}
-    static String compactTitle(String name){
-        String text=name==null?"":name.replaceAll("\\s+","").trim();
-        if(text.isEmpty())return "待上课";
-        return text.substring(0,text.offsetByCodePoints(0,Math.min(3,text.codePointCount(0,text.length()))));
-    }
     static String title(String name){
         String text=name==null?"":name.replaceAll("\\s+"," ").trim();
         if(text.isEmpty())return "即将上课";
         return text.codePointCount(0,text.length())<=8?text:text.substring(0,text.offsetByCodePoints(0,7))+"…";
     }
     static String field(String value){return value==null||value.trim().isEmpty()?"未提供":value.trim();}
-    static String details(long start,String teacher,String room){return "开课时间："+time(start)+"\n授课教师："+field(teacher)+"\n上课教室："+field(room);}
+    // HyperOS' floating expansion can take only the first newline-delimited item.
+    // Keep all fields in one paragraph and let SystemUI wrap it to available width.
+    static String details(long start,String teacher,String room){return "开课时间："+time(start)+"；授课教师："+field(teacher)+"；上课教室："+field(room);}
 }
