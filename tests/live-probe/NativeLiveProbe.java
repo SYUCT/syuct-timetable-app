@@ -42,14 +42,16 @@ public final class NativeLiveProbe extends Activity {
         check(CourseNoticeStyle.chipName("🧪实验课程").equals("🧪实验课"),"no split surrogate pairs");
         check(CourseNoticeStyle.chipName(null).equals("课程提醒"),"empty fallback");
         check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
-        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("08:00 开课\n授课教师：张老师\n上课教室：瑞师楼222"),"separate fields for standard expansion");
-        check(CourseNoticeStyle.summary(0," 瑞师楼222 ").equals("08:00 开课 · 瑞师楼222"),"summary shows actual classroom");
-        check(CourseNoticeStyle.summary(0,null).equals("08:00 开课 · 教室未提供")&&CourseNoticeStyle.summary(0,"  ").equals("08:00 开课 · 教室未提供"),"missing classroom is explicit");
-        check(CourseNoticeStyle.summary(0,"瑞师楼（原3号教学楼）222").endsWith("瑞师楼（原3号教学楼）222"),"full classroom remains unchanged");
-        check(CourseNoticeStyle.details(0,null,"").contains("授课教师：未提供\n上课教室：未提供"),"missing fields explicit");
+        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00\n授课教师：张老师\n课程地点：瑞师楼222"),"separate fields for standard expansion");
+        check(CourseNoticeStyle.summary(0," 张老师 "," 瑞师楼222 ").equals("08:00 开课 · 教师：张老师 · 教室：瑞师楼222"),"ordinary summary includes teacher and classroom");
+        check(CourseNoticeStyle.summary(0,null,null).equals("08:00 开课 · 教师：未提供 · 教室：未提供"),"missing fields are explicit");
+        check(CourseNoticeStyle.summary(0,"张老师","瑞师楼（原3号教学楼）222").endsWith("瑞师楼（原3号教学楼）222"),"full classroom remains unchanged");
+        check(CourseNoticeStyle.details(0,null,"").contains("授课教师：未提供\n课程地点：未提供"),"missing fields explicit");
+        check(CourseNoticeStyle.liveDetails(0,"张老师","瑞师楼222").startsWith("地点：瑞师楼222 · 08:00 开课 · 教师：张老师"),"live first line carries classroom time and teacher");
         String summary=branded.extras.getCharSequence(Notification.EXTRA_TEXT).toString();
         String expanded=branded.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString();
-        check(summary.endsWith(" 开课 · 瑞师楼222")&&!summary.contains("查看详情"),"preview summary shows classroom instead of instructions");
+        check(branded.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"ordinary preview keeps full title");
+        check(summary.contains("教师：示例教师")&&summary.contains("教室：瑞师楼222")&&!summary.contains("查看详情"),"preview summary shows teacher and classroom");
         check(expanded.contains("示例教师")&&expanded.contains("瑞师楼222")&&expanded.split("\n").length==3,"standard expansion has three rows");
         check(branded.actions.length==1&&branded.actions[0].title.equals("查看详情"),"ordinary notice keeps details action");
         check(NoticeCompat.xiaomi("Redmi","Xiaomi")&&NoticeCompat.xiaomi("POCO","Xiaomi"),"Xiaomi family");
@@ -70,10 +72,16 @@ public final class NativeLiveProbe extends Activity {
         Notification late=LiveCourseNotice.liveState(base(),action,stop,start,now+300000,true).build();
         check(late.when==start&&late.getTimeoutAfter()==600000,"late delivery never restarts fifteen minutes");
         Notification compact=CourseNoticeStyle.chip(Notification.Builder.recoverBuilder(this,full),"自然辩证法概论").build();
-        check(compact.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证"),"title fallback four characters");
+        check(compact.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"chip leaves ordinary notification title complete");
         check(compact.extras.getString("android.shortCriticalText").equals("自然辩证"),"explicit four-character chip");
         check(compact.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("自然辩证法概论"),"expanded title not shortened or prefixed");
         check(compact.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals(expanded),"full details preserved");
+        Notification liveCard=CourseNoticeStyle.chip(base().setStyle(new Notification.BigTextStyle()
+            .setBigContentTitle("自然辩证法概论")
+            .bigText(CourseNoticeStyle.liveDetails(start,"示例教师","瑞师楼222"))),"自然辩证法概论").build();
+        check(liveCard.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"live notification shade title remains complete");
+        check(liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().startsWith("地点：瑞师楼222"),"live card first line shows classroom");
+        check(liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("示例教师"),"live card also carries teacher");
         check(compact.when==start&&compact.getTimeoutAfter()==900000,"countdown target preserved");
         check(compact.hasPromotableCharacteristics()==full.hasPromotableCharacteristics(),"promotion eligibility unchanged");
         if(getIntent().getBooleanExtra("denied",false)){
@@ -83,7 +91,8 @@ public final class NativeLiveProbe extends Activity {
         }
         check(CourseReminder.notifications(this),"notifications granted");
         check(!LiveCourseNotice.enabled(this),"default disabled");
-        check((LiveCourseNotice.build(this,base(),"off",151,start,now).flags&Notification.FLAG_ONGOING_EVENT)==0,"off retains ordinary notice");
+        Notification off=LiveCourseNotice.build(this,base(),"off",151,start,now,"自然辩证法概论","示例教师","瑞师楼222");
+        check((off.flags&Notification.FLAG_ONGOING_EVENT)==0&&off.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"off retains full ordinary title");
         check(LiveCourseNotice.preview(this).contains("请先开启"),"opt in required");
         LiveCourseNotice.enable(this,true);
         // Force the production compatibility builder on AOSP to test IPC and
@@ -104,7 +113,7 @@ public final class NativeLiveProbe extends Activity {
         LiveCourseNotice.enable(this,false);await("disable cancels",()->active(LiveCourseNotice.PREVIEW,153)==null);
         new LiveCourseNotice().onReceive(this,obsolete);check(active(LiveCourseNotice.PREVIEW,153)==null,"disabled refresh ignored");
         LiveCourseNotice.enable(this,true);
-        long sent=System.currentTimeMillis();manager().notify("expiry",151,LiveCourseNotice.build(this,base().setTimeoutAfter(2000),"expiry",151,sent+2000,sent));
+        long sent=System.currentTimeMillis();manager().notify("expiry",151,LiveCourseNotice.build(this,base().setTimeoutAfter(2000),"expiry",151,sent+2000,sent,"自然辩证法概论","示例教师","瑞师楼222"));
         await("expiry fixture posted",()->active("expiry",151)!=null);await("system timeout at start",()->active("expiry",151)==null);
         manager().notify("deleted",151,base().build());await("deletion fixture",()->active("deleted",151)!=null);
         LiveCourseNotice.reconcile(this,Collections.emptyList(),System.currentTimeMillis());await("course deletion cleans notice",()->active("deleted",151)==null);

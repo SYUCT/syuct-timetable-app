@@ -19,7 +19,7 @@ final class NoticePreview {
         PendingIntent pi=CourseNoticeDetails.open(c,countdown?LiveCourseNotice.PREVIEW:"reminder_test",name,start,teacher,room,true);
         String detail=CourseNoticeStyle.details(start,teacher,room);
         return new Notification.Builder(c,CourseReminder.CHANNEL)
-            .setContentTitle(CourseNoticeStyle.chipName(name)).setSubText("效果预览").setContentText(CourseNoticeStyle.summary(start,room))
+            .setContentTitle(name).setSubText("效果预览").setContentText(CourseNoticeStyle.summary(start,teacher,room))
             .setStyle(new Notification.BigTextStyle().setBigContentTitle(name).bigText(detail))
             .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
             .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)

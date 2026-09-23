@@ -53,10 +53,14 @@ final class CourseNoticeStyle {
         return text.substring(0,text.offsetByCodePoints(0,Math.min(4,text.codePointCount(0,text.length()))));
     }
     static Notification.Builder chip(Notification.Builder builder,String name){
-        builder.setContentTitle(chipName(name));
+        // The promoted chip has a separate short-text field. Never truncate
+        // EXTRA_TITLE: the same notification also appears in the shade.
         if(android.os.Build.VERSION.SDK_INT>=36)builder.setShortCriticalText(chipName(name));
         return builder;
     }
-    static String summary(long start,String room){return time(start)+" 开课 · "+(room==null||room.trim().isEmpty()?"教室未提供":room.trim());}
-    static String details(long start,String teacher,String room){return time(start)+" 开课\n授课教师："+field(teacher)+"\n上课教室："+field(room);}
+    static String summary(long start,String teacher,String room){return time(start)+" 开课 · 教师："+field(teacher)+" · 教室："+field(room);}
+    static String details(long start,String teacher,String room){return "开课时间："+time(start)+"\n授课教师："+field(teacher)+"\n课程地点："+field(room);}
+    // Some OEM live cards show only the first detail line. Keep the classroom
+    // first, with the start time and teacher on that same visible line.
+    static String liveDetails(long start,String teacher,String room){return "地点："+field(room)+" · "+time(start)+" 开课 · 教师："+field(teacher);}
 }

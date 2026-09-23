@@ -26,7 +26,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         if(!enabled(c))return "开启后，课前15分钟尝试显示系统倒计时；上课或关闭后结束。";
         return available(c)?"已开启。岛内显示课程名前四字；卡片保留系统计时，点“查看详情”查看完整课程信息。是否上岛由手机系统决定。":"已开启，但系统未允许提升显示，仍使用普通通知。";
     }
-    static Notification build(Context c,Notification.Builder builder,String key,int id,long start,long now){
+    static Notification build(Context c,Notification.Builder builder,String key,int id,long start,long now,String name,String teacher,String room){
         CourseNoticeStyle.apply(c,builder);
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
         if(Build.VERSION.SDK_INT<36||!available(c))return builder.build();
@@ -38,14 +38,13 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         // The header timer remains system-owned; the chip uses four course characters.
         // Never restart at 15 minutes if delivery was late; target actual class start.
         liveState(builder,endAction,end,start,now,true);
-        CourseNoticeStyle.chip(builder,original.extras.getCharSequence(Notification.EXTRA_TITLE,"").toString());
+        // Only a promoted notice gets the four-character chip. Its expanded
+        // card has its own first line so the classroom is visible on Xiaomi.
+        builder.setStyle(new Notification.BigTextStyle().setBigContentTitle(name)
+            .bigText(CourseNoticeStyle.liveDetails(start,teacher,room)));
+        CourseNoticeStyle.chip(builder,name);
         Notification notice=builder.build();
-        if(!notice.hasPromotableCharacteristics()){
-            android.os.Bundle extras=new android.os.Bundle();
-            extras.putBoolean("android.requestPromotedOngoing",false);
-            return builder.addExtras(extras).setOngoing(false).setUsesChronometer(false).setShortCriticalText(null)
-                .setDeleteIntent(null).setActions(original.actions==null?new Notification.Action[0]:original.actions).build();
-        }
+        if(!notice.hasPromotableCharacteristics())return original;
         return notice;
     }
     static Notification.Builder liveState(Notification.Builder builder,Notification.Action action,PendingIntent end,long start,long now,boolean promoted){
@@ -91,7 +90,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             NoticePreview sample=NoticePreview.sample(c);
             Notification.Builder builder=sample.builder(c,start,true).setOnlyAlertOnce(false);
             android.os.Bundle token=new android.os.Bundle();token.putLong("syuct.preview.target",start);builder.addExtras(token);
-            post(c,PREVIEW,153,build(c,builder,PREVIEW,153,start,now));
+            post(c,PREVIEW,153,build(c,builder,PREVIEW,153,start,now,sample.name,sample.teacher,sample.room));
             return new PreviewResult(start,"已发送预览请求，正在确认系统是否接收…");
         }catch(RuntimeException e){return new PreviewResult(0,"预览发送失败，请检查通知权限与声音设置。");}
     }

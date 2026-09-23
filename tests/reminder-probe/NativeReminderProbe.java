@@ -35,6 +35,8 @@ public final class NativeReminderProbe extends Activity {
             NoticePreview preview=NoticePreview.sample(this);
             check(preview.teacher.equals("测试教师")&&preview.borrowed,"preview borrows real teacher");
             Notification sampleNotice=preview.builder(this,start,true).build();
+            check(sampleNotice.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("提醒测试课程"),"ordinary preview title is complete");
+            check(sampleNotice.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("教师：测试教师"),"preview compact teacher");
             check(sampleNotice.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("授课教师：测试教师"),"preview expanded teacher");
             check(sampleNotice.getTimeoutAfter()==900000,"preview lasts fifteen minutes");
             CourseReminder.prefs(this).edit().putBoolean("enabled",true).commit();
@@ -52,11 +54,13 @@ public final class NativeReminderProbe extends Activity {
                 check(manager().getActiveNotifications().length==0,"no premature send");
                 check(CourseReminder.status(this).contains("下次计划提醒"),"next reminder displayed");
                 CourseReminder.schedule(this,due+300000,false);
+                awaitCount(1);
                 check(manager().getActiveNotifications().length==1,"reopening sends unsent reminder");
                 Notification actual=manager().getActiveNotifications()[0].getNotification();
+                check(actual.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("提醒测试课程"),"ordinary reminder title is complete");
                 check(actual.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("提醒测试课程"),"full course title");
-                check(actual.extras.getCharSequence(Notification.EXTRA_TEXT).toString().equals("13:30 开课 · 测试教室"),"actual dispatched summary shows classroom");
-                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("13:30 开课\n授课教师：测试教师\n上课教室：测试教室"),"actual dispatched reminder has all four fields");
+                check(actual.extras.getCharSequence(Notification.EXTRA_TEXT).toString().equals("13:30 开课 · 教师：测试教师 · 教室：测试教室"),"actual compact summary shows teacher and classroom");
+                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("开课时间：13:30\n授课教师：测试教师\n课程地点：测试教室"),"actual expanded reminder has labelled fields");
                 check(actual.getTimeoutAfter()==600000,"late delivery expires at actual start");
                 long posted=manager().getActiveNotifications()[0].getPostTime();
                 String key=manager().getActiveNotifications()[0].getTag();
