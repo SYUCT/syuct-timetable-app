@@ -6,7 +6,7 @@ sdk_dir="${ANDROID_HOME:-${tool_dir}/sdk}"
 adb_bin="${sdk_dir}/platform-tools/adb"
 emulator_bin="${sdk_dir}/emulator/emulator"
 avd_name="SYUCT_Preview_API35"
-apk_path="${project_dir}/artifacts/SYUCT-Timetable-0.2.15-alpha1.apk"
+apk_path="${project_dir}/artifacts/SYUCT-Timetable-0.2.18-alpha1.apk"
 if [[ ! -x "$adb_bin" || ! -x "$emulator_bin" || ! -f "$apk_path" ]]; then
   print '未找到模拟器或 APK。请先按 README 配置工具，并将安装包放入 artifacts。'
   exit 1
