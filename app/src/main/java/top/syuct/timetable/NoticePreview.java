@@ -17,10 +17,9 @@ final class NoticePreview {
     String location(){return room==null||room.trim().isEmpty()?"地点待定":room.trim();}
     Notification.Builder builder(Context c,long start,boolean countdown){
         PendingIntent pi=CourseNoticeDetails.open(c,countdown?LiveCourseNotice.PREVIEW:"reminder_test",name,start,teacher,room,true);
-        String detail=CourseNoticeStyle.details(start,teacher,room);
         return new Notification.Builder(c,CourseReminder.CHANNEL)
             .setContentTitle(name).setSubText("效果预览").setContentText(CourseNoticeStyle.summary(start,teacher,room))
-            .setStyle(new Notification.BigTextStyle().setBigContentTitle(name).bigText(detail))
+            .setStyle(CourseNoticeStyle.rows(start,teacher,room).setBigContentTitle(name))
             .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
             .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setPublicVersion(CourseNoticeStyle.apply(c,new Notification.Builder(c,CourseReminder.CHANNEL)).setContentTitle("提醒效果预览").setContentText("解锁查看预览内容").build())

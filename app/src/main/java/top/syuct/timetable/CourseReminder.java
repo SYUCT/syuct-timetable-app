@@ -102,11 +102,10 @@ public final class CourseReminder extends BroadcastReceiver {
         SharedPreferences p=prefs(c);
         for(ReminderPlanner.Event e:ReminderPlanner.pending(all,now,sent)){
             PendingIntent pi=CourseNoticeDetails.open(c,e.key,e.course.name,e.start,e.course.teacher,e.course.room,false);
-            String body=CourseNoticeStyle.details(e.start,e.course.teacher,e.course.room);
             Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
             Notification.Builder builder=new Notification.Builder(c,CHANNEL)
                 .setContentTitle(e.course.name).setContentText(CourseNoticeStyle.summary(e.start,e.course.teacher,e.course.room))
-                .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(body))
+                .setStyle(CourseNoticeStyle.rows(e.start,e.course.teacher,e.course.room).setBigContentTitle(e.course.name))
                 .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)

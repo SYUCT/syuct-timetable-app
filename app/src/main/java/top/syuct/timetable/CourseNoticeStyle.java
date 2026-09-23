@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter;
 /** Standard system template with the same badge and accent as the packaged UI. */
 final class CourseNoticeStyle {
     static final int BLUE=0xff3463c9;
+    static final String LINE_BREAK="\n";
     private static Icon small;
     private CourseNoticeStyle(){}
     static synchronized Icon smallIcon(Context context){
@@ -58,9 +59,24 @@ final class CourseNoticeStyle {
         if(android.os.Build.VERSION.SDK_INT>=36)builder.setShortCriticalText(chipName(name));
         return builder;
     }
-    static String summary(long start,String teacher,String room){return time(start)+" 开课 · 教师："+field(teacher)+" · 教室："+field(room);}
-    static String details(long start,String teacher,String room){return "开课时间："+time(start)+"\n授课教师："+field(teacher)+"\n课程地点："+field(room);}
-    // Some OEM live cards show only the first detail line. Keep the classroom
-    // first, with the start time and teacher on that same visible line.
-    static String liveDetails(long start,String teacher,String room){return "地点："+field(room)+" · "+time(start)+" 开课 · 教师："+field(teacher);}
+    static String compactRoom(String room){return field(room).replaceAll("[（(]原[^）)]*[）)]"," ").replaceAll("\\s+"," ").trim();}
+    static String summary(long start,String teacher,String room){
+        return "开课时间："+time(start)+LINE_BREAK
+            +"授课教师："+field(teacher)+LINE_BREAK
+            +"课程地点："+compactRoom(room);
+    }
+    static Notification.InboxStyle rows(long start,String teacher,String room){
+        return new Notification.InboxStyle()
+            .addLine("开课时间："+time(start))
+            .addLine("授课教师："+field(teacher))
+            .addLine("课程地点："+field(room));
+    }
+    // Promoted live updates require a supported system template. BigTextStyle
+    // preserves real newline characters in its expanded detail text. Put the
+    // classroom first because some OEM cards reveal only the first detail row.
+    static String liveDetails(long start,String teacher,String room){
+        return "课程地点："+field(room)+LINE_BREAK
+            +"开课时间："+time(start)+LINE_BREAK
+            +"授课教师："+field(teacher);
+    }
 }

@@ -42,17 +42,19 @@ public final class NativeLiveProbe extends Activity {
         check(CourseNoticeStyle.chipName("🧪实验课程").equals("🧪实验课"),"no split surrogate pairs");
         check(CourseNoticeStyle.chipName(null).equals("课程提醒"),"empty fallback");
         check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
-        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00\n授课教师：张老师\n课程地点：瑞师楼222"),"separate fields for standard expansion");
-        check(CourseNoticeStyle.summary(0," 张老师 "," 瑞师楼222 ").equals("08:00 开课 · 教师：张老师 · 教室：瑞师楼222"),"ordinary summary includes teacher and classroom");
-        check(CourseNoticeStyle.summary(0,null,null).equals("08:00 开课 · 教师：未提供 · 教室：未提供"),"missing fields are explicit");
-        check(CourseNoticeStyle.summary(0,"张老师","瑞师楼（原3号教学楼）222").endsWith("瑞师楼（原3号教学楼）222"),"full classroom remains unchanged");
-        check(CourseNoticeStyle.details(0,null,"").contains("授课教师：未提供\n课程地点：未提供"),"missing fields explicit");
-        check(CourseNoticeStyle.liveDetails(0,"张老师","瑞师楼222").startsWith("地点：瑞师楼222 · 08:00 开课 · 教师：张老师"),"live first line carries classroom time and teacher");
+        check(CourseNoticeStyle.summary(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00\n授课教师：张老师\n课程地点：瑞师楼222"),"ordinary summary has three visual rows");
+        check(CourseNoticeStyle.summary(0,null,null).equals("开课时间：08:00\n授课教师：未提供\n课程地点：未提供"),"missing fields are explicit");
+        check(CourseNoticeStyle.summary(0,"张老师","瑞师楼（原3号教学楼）222").endsWith("课程地点：瑞师楼 222"),"compact room omits long old-building alias");
+        check(CourseNoticeStyle.liveDetails(0,"张老师","瑞师楼222").equals("课程地点：瑞师楼222\n开课时间：08:00\n授课教师：张老师"),"live details have three labelled rows without dots");
+        TextView lineProbe=new TextView(this);lineProbe.setText(CourseNoticeStyle.liveDetails(0,"张老师","瑞师楼222"));
+        lineProbe.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED));
+        lineProbe.layout(0,0,1000,lineProbe.getMeasuredHeight());
+        check(lineProbe.getLayout().getLineCount()==3,"Android lays out newline separators as three rows");
         String summary=branded.extras.getCharSequence(Notification.EXTRA_TEXT).toString();
-        String expanded=branded.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString();
+        CharSequence[] rows=branded.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
         check(branded.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"ordinary preview keeps full title");
-        check(summary.contains("教师：示例教师")&&summary.contains("教室：瑞师楼222")&&!summary.contains("查看详情"),"preview summary shows teacher and classroom");
-        check(expanded.contains("示例教师")&&expanded.contains("瑞师楼222")&&expanded.split("\n").length==3,"standard expansion has three rows");
+        check(summary.contains("\n授课教师：示例教师\n课程地点：瑞师楼222")&&!summary.contains("·"),"preview summary shows three clean rows");
+        check(rows.length==3&&rows[0].toString().startsWith("开课时间：")&&rows[1].toString().equals("授课教师：示例教师")&&rows[2].toString().equals("课程地点：瑞师楼222"),"ordinary expansion has three independent lines");
         check(branded.actions.length==1&&branded.actions[0].title.equals("查看详情"),"ordinary notice keeps details action");
         check(NoticeCompat.xiaomi("Redmi","Xiaomi")&&NoticeCompat.xiaomi("POCO","Xiaomi"),"Xiaomi family");
         check(!NoticeCompat.xiaomi(null,null)&&!NoticeCompat.xiaomi("vivo","vivo"),"scoped to Xiaomi");
@@ -64,7 +66,10 @@ public final class NativeLiveProbe extends Activity {
         Notification.Action action=new Notification.Action.Builder(null,"结束提醒",stop).build();
         long now=System.currentTimeMillis(),start=now+900000;
         Bundle stale=new Bundle();stale.putString("miui.focus.param","unused");
-        Notification full=LiveCourseNotice.liveState(base().addExtras(stale),action,stop,start,now,true).build();
+        Notification.Builder liveBuilder=base().addExtras(stale).setStyle(new Notification.BigTextStyle()
+            .setBigContentTitle("自然辩证法概论")
+            .bigText(CourseNoticeStyle.liveDetails(start,"示例教师","瑞师楼222")));
+        Notification full=LiveCourseNotice.liveState(liveBuilder,action,stop,start,now,true).build();
         check(!NoticeCompat.legacy(full),"unused payload stripped");
         check(full.when==start&&full.getTimeoutAfter()==900000,"fifteen-minute target");
         check(full.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)&&full.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN),"ticking countdown preserved");
@@ -75,13 +80,13 @@ public final class NativeLiveProbe extends Activity {
         check(compact.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"chip leaves ordinary notification title complete");
         check(compact.extras.getString("android.shortCriticalText").equals("自然辩证"),"explicit four-character chip");
         check(compact.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("自然辩证法概论"),"expanded title not shortened or prefixed");
-        check(compact.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals(expanded),"full details preserved");
+        check(compact.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals(full.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()),"three-row live details preserved");
         Notification liveCard=CourseNoticeStyle.chip(base().setStyle(new Notification.BigTextStyle()
             .setBigContentTitle("自然辩证法概论")
             .bigText(CourseNoticeStyle.liveDetails(start,"示例教师","瑞师楼222"))),"自然辩证法概论").build();
         check(liveCard.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"live notification shade title remains complete");
-        check(liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().startsWith("地点：瑞师楼222"),"live card first line shows classroom");
-        check(liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("示例教师"),"live card also carries teacher");
+        check(liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().startsWith("课程地点：瑞师楼222"),"live card first line shows classroom");
+        check(liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("\n开课时间：")&&liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().endsWith("\n授课教师：示例教师")&&!liveCard.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("·"),"live card separates time and teacher without dots");
         check(compact.when==start&&compact.getTimeoutAfter()==900000,"countdown target preserved");
         check(compact.hasPromotableCharacteristics()==full.hasPromotableCharacteristics(),"promotion eligibility unchanged");
         if(getIntent().getBooleanExtra("denied",false)){
