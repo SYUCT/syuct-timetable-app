@@ -42,9 +42,9 @@ public final class NativeLiveProbe extends Activity {
         check(CourseNoticeStyle.chipName("🧪实验课程").equals("🧪实验课"),"no split surrogate pairs");
         check(CourseNoticeStyle.chipName(null).equals("课程提醒"),"empty fallback");
         check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
-        check(CourseNoticeStyle.summary(0," 张老师 "," 瑞师楼222 ").equals("开课时间：08:00\n授课教师：张老师\n课程地点：瑞师楼222"),"ordinary summary has three visual rows");
-        check(CourseNoticeStyle.summary(0,null,null).equals("开课时间：08:00\n授课教师：未提供\n课程地点：未提供"),"missing fields are explicit");
-        check(CourseNoticeStyle.summary(0,"张老师","瑞师楼（原3号教学楼）222").endsWith("课程地点：瑞师楼 222"),"compact room omits long old-building alias");
+        check(CourseNoticeStyle.summary(0," 张老师 "," 瑞师楼222 ").equals("教室：瑞师楼222\n开课时间：08:00\n授课教师：张老师"),"ordinary summary puts classroom first");
+        check(CourseNoticeStyle.summary(0,null,null).equals("教室：未提供\n开课时间：08:00\n授课教师：未提供"),"missing fields are explicit");
+        check(CourseNoticeStyle.summary(0,"张老师","瑞师楼（原3号教学楼）222").startsWith("教室：瑞师楼 222"),"compact room omits long old-building alias");
         check(CourseNoticeStyle.liveDetails(0,"张老师","瑞师楼222").equals("课程地点：瑞师楼222\n开课时间：08:00\n授课教师：张老师"),"live details have three labelled rows without dots");
         TextView lineProbe=new TextView(this);lineProbe.setText(CourseNoticeStyle.liveDetails(0,"张老师","瑞师楼222"));
         lineProbe.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED));
@@ -53,8 +53,8 @@ public final class NativeLiveProbe extends Activity {
         String summary=branded.extras.getCharSequence(Notification.EXTRA_TEXT).toString();
         CharSequence[] rows=branded.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
         check(branded.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("自然辩证法概论"),"ordinary preview keeps full title");
-        check(summary.contains("\n授课教师：示例教师\n课程地点：瑞师楼222")&&!summary.contains("·"),"preview summary shows three clean rows");
-        check(rows.length==3&&rows[0].toString().startsWith("开课时间：")&&rows[1].toString().equals("授课教师：示例教师")&&rows[2].toString().equals("课程地点：瑞师楼222"),"ordinary expansion has three independent lines");
+        check(summary.startsWith("教室：瑞师楼222\n开课时间：")&&summary.endsWith("\n授课教师：示例教师")&&!summary.contains("·"),"preview summary puts classroom first");
+        check(rows.length==3&&rows[0].toString().equals("教室：瑞师楼222")&&rows[1].toString().startsWith("开课时间：")&&rows[2].toString().equals("授课教师：示例教师"),"ordinary expansion puts classroom in first row");
         check(branded.actions.length==1&&branded.actions[0].title.equals("查看详情"),"ordinary notice keeps details action");
         check(NoticeCompat.xiaomi("Redmi","Xiaomi")&&NoticeCompat.xiaomi("POCO","Xiaomi"),"Xiaomi family");
         check(!NoticeCompat.xiaomi(null,null)&&!NoticeCompat.xiaomi("vivo","vivo"),"scoped to Xiaomi");

@@ -61,15 +61,15 @@ final class CourseNoticeStyle {
     }
     static String compactRoom(String room){return field(room).replaceAll("[（(]原[^）)]*[）)]"," ").replaceAll("\\s+"," ").trim();}
     static String summary(long start,String teacher,String room){
-        return "开课时间："+time(start)+LINE_BREAK
-            +"授课教师："+field(teacher)+LINE_BREAK
-            +"课程地点："+compactRoom(room);
+        return "教室："+compactRoom(room)+LINE_BREAK
+            +"开课时间："+time(start)+LINE_BREAK
+            +"授课教师："+field(teacher);
     }
     static Notification.InboxStyle rows(long start,String teacher,String room){
         return new Notification.InboxStyle()
+            .addLine("教室："+compactRoom(room))
             .addLine("开课时间："+time(start))
-            .addLine("授课教师："+field(teacher))
-            .addLine("课程地点："+field(room));
+            .addLine("授课教师："+field(teacher));
     }
     // Promoted live updates require a supported system template. BigTextStyle
     // preserves real newline characters in its expanded detail text. Put the

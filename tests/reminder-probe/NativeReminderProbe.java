@@ -37,7 +37,7 @@ public final class NativeReminderProbe extends Activity {
             Notification sampleNotice=preview.builder(this,start,true).build();
             check(sampleNotice.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("提醒测试课程"),"ordinary preview title is complete");
             check(sampleNotice.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("教师：测试教师"),"preview compact teacher");
-            check(sampleNotice.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)[1].toString().equals("授课教师：测试教师"),"preview expanded teacher row");
+            check(sampleNotice.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)[0].toString().equals("教室：测试教室"),"preview expanded classroom is first");
             check(sampleNotice.getTimeoutAfter()==900000,"preview lasts fifteen minutes");
             CourseReminder.prefs(this).edit().putBoolean("enabled",true).commit();
             if(blocked){
@@ -59,9 +59,9 @@ public final class NativeReminderProbe extends Activity {
                 Notification actual=manager().getActiveNotifications()[0].getNotification();
                 check(actual.extras.getCharSequence(Notification.EXTRA_TITLE).toString().equals("提醒测试课程"),"ordinary reminder title is complete");
                 check(actual.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("提醒测试课程"),"full course title");
-                check(actual.extras.getCharSequence(Notification.EXTRA_TEXT).toString().equals("开课时间：13:30\n授课教师：测试教师\n课程地点：测试教室"),"actual summary has three clean rows");
+                check(actual.extras.getCharSequence(Notification.EXTRA_TEXT).toString().equals("教室：测试教室\n开课时间：13:30\n授课教师：测试教师"),"actual summary puts classroom first");
                 CharSequence[] detailRows=actual.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
-                check(detailRows.length==3&&detailRows[0].toString().equals("开课时间：13:30")&&detailRows[1].toString().equals("授课教师：测试教师")&&detailRows[2].toString().equals("课程地点：测试教室"),"actual expanded reminder has three independent rows");
+                check(detailRows.length==3&&detailRows[0].toString().equals("教室：测试教室")&&detailRows[1].toString().equals("开课时间：13:30")&&detailRows[2].toString().equals("授课教师：测试教师"),"actual expanded reminder shows classroom first");
                 check(actual.getTimeoutAfter()==600000,"late delivery expires at actual start");
                 long posted=manager().getActiveNotifications()[0].getPostTime();
                 String key=manager().getActiveNotifications()[0].getTag();
@@ -82,7 +82,7 @@ public final class NativeReminderProbe extends Activity {
                 manager().cancelAll();
                 course.remove("teacher");getSharedPreferences("timetable",MODE_PRIVATE).edit().putString("state",sample.toString()).commit();
                 check(CourseReminder.events(this).get(0).course.teacher.isEmpty(),"legacy course without teacher still schedules");
-                check(NoticePreview.sample(this).builder(this,start,true).build().extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)[1].toString().equals("授课教师：未提供"),"legacy preview never invents teacher");
+                check(NoticePreview.sample(this).builder(this,start,true).build().extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)[2].toString().equals("授课教师：未提供"),"legacy preview never invents teacher");
                 WidgetPinRequest.prefs(this).edit().clear().commit();check(WidgetPinRequest.status(this).isEmpty(),"no phantom pin result");
                 WidgetPinRequest.prefs(this).edit().putString("state","pending").putString("token","expected").putLong("at",System.currentTimeMillis()).commit();
                 check(!WidgetPinRequest.status(this).startsWith("已添加"),"request is not success");
