@@ -42,11 +42,14 @@ public final class NativeLiveProbe extends Activity {
         check(CourseNoticeStyle.chipName("🧪实验课程").equals("🧪实验课"),"no split surrogate pairs");
         check(CourseNoticeStyle.chipName(null).equals("课程提醒"),"empty fallback");
         check(CourseNoticeStyle.time(0).equals("08:00"),"Beijing time");
-        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("08:00 开课 · 点“查看详情”\n授课教师：张老师\n上课教室：瑞师楼222"),"separate fields for standard expansion");
+        check(CourseNoticeStyle.details(0," 张老师 "," 瑞师楼222 ").equals("08:00 开课\n授课教师：张老师\n上课教室：瑞师楼222"),"separate fields for standard expansion");
+        check(CourseNoticeStyle.summary(0," 瑞师楼222 ").equals("08:00 开课 · 瑞师楼222"),"summary shows actual classroom");
+        check(CourseNoticeStyle.summary(0,null).equals("08:00 开课 · 教室未提供")&&CourseNoticeStyle.summary(0,"  ").equals("08:00 开课 · 教室未提供"),"missing classroom is explicit");
+        check(CourseNoticeStyle.summary(0,"瑞师楼（原3号教学楼）222").endsWith("瑞师楼（原3号教学楼）222"),"full classroom remains unchanged");
         check(CourseNoticeStyle.details(0,null,"").contains("授课教师：未提供\n上课教室：未提供"),"missing fields explicit");
         String summary=branded.extras.getCharSequence(Notification.EXTRA_TEXT).toString();
         String expanded=branded.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString();
-        check(summary.contains("查看详情")&&summary.length()<24,"short OEM summary points to full details");
+        check(summary.endsWith(" 开课 · 瑞师楼222")&&!summary.contains("查看详情"),"preview summary shows classroom instead of instructions");
         check(expanded.contains("示例教师")&&expanded.contains("瑞师楼222")&&expanded.split("\n").length==3,"standard expansion has three rows");
         check(branded.actions.length==1&&branded.actions[0].title.equals("查看详情"),"ordinary notice keeps details action");
         check(NoticeCompat.xiaomi("Redmi","Xiaomi")&&NoticeCompat.xiaomi("POCO","Xiaomi"),"Xiaomi family");

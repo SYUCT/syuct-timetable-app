@@ -105,7 +105,7 @@ public final class CourseReminder extends BroadcastReceiver {
             String body=CourseNoticeStyle.details(e.start,e.course.teacher,e.course.room);
             Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
             Notification.Builder builder=new Notification.Builder(c,CHANNEL)
-                .setContentTitle(CourseNoticeStyle.chipName(e.course.name)).setContentText(CourseNoticeStyle.summary(e.start))
+                .setContentTitle(CourseNoticeStyle.chipName(e.course.name)).setContentText(CourseNoticeStyle.summary(e.start,e.course.room))
                 .setStyle(new Notification.BigTextStyle().setBigContentTitle(e.course.name).bigText(body))
                 .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
                 .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)

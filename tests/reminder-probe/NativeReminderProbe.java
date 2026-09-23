@@ -55,7 +55,8 @@ public final class NativeReminderProbe extends Activity {
                 check(manager().getActiveNotifications().length==1,"reopening sends unsent reminder");
                 Notification actual=manager().getActiveNotifications()[0].getNotification();
                 check(actual.extras.getCharSequence(Notification.EXTRA_TITLE_BIG).toString().equals("提醒测试课程"),"full course title");
-                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("13:30 开课 · 点“查看详情”\n授课教师：测试教师\n上课教室：测试教室"),"actual dispatched reminder has all four fields");
+                check(actual.extras.getCharSequence(Notification.EXTRA_TEXT).toString().equals("13:30 开课 · 测试教室"),"actual dispatched summary shows classroom");
+                check(actual.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().equals("13:30 开课\n授课教师：测试教师\n上课教室：测试教室"),"actual dispatched reminder has all four fields");
                 check(actual.getTimeoutAfter()==600000,"late delivery expires at actual start");
                 long posted=manager().getActiveNotifications()[0].getPostTime();
                 String key=manager().getActiveNotifications()[0].getTag();

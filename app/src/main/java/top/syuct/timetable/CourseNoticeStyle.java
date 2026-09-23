@@ -57,6 +57,6 @@ final class CourseNoticeStyle {
         if(android.os.Build.VERSION.SDK_INT>=36)builder.setShortCriticalText(chipName(name));
         return builder;
     }
-    static String summary(long start){return time(start)+" 开课 · 点“查看详情”";}
-    static String details(long start,String teacher,String room){return summary(start)+"\n授课教师："+field(teacher)+"\n上课教室："+field(room);}
+    static String summary(long start,String room){return time(start)+" 开课 · "+(room==null||room.trim().isEmpty()?"教室未提供":room.trim());}
+    static String details(long start,String teacher,String room){return time(start)+" 开课\n授课教师："+field(teacher)+"\n上课教室："+field(room);}
 }
