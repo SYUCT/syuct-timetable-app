@@ -7,23 +7,36 @@ import java.util.*;
 public final class ReminderPlanner {
     public static final long LEAD=15*60_000L;
     public static final class Course {
-        public String name,room,teacher,type;public int day,start,first,last;
+        public String name,room,teacher,type;public int day,start,first,last;public int[] weeks;
         public Course(String n,String r,String t,int d,int s,int f,int l){this(n,r,"",t,d,s,f,l);}
-        public Course(String n,String r,String teacher,String t,int d,int s,int f,int l){name=n;room=r;this.teacher=teacher;type=t;day=d;start=s;first=f;last=l;}
+        public Course(String n,String r,String teacher,String t,int d,int s,int f,int l){this(n,r,teacher,t,d,s,f,l,null);}
+        public Course(String n,String r,String teacher,String t,int d,int s,int f,int l,int[] weeks){name=n;room=r;this.teacher=teacher;type=t;day=d;start=s;first=f;last=l;this.weeks=weeks;}
     }
     public static final class Event {
         public final Course course;public final long start,remind;public final String key;
         Event(Course c,long at){course=c;start=at;remind=at-LEAD;key=at+"|"+c.name.length()+":"+c.name+"|"+c.room;}
     }
     public static List<Event> events(String firstMonday,int total,String[][] times,List<Course> courses){
+        return events(firstMonday,total,times,courses,Collections.emptyList());
+    }
+    private static boolean matches(Course course,int week){
+        if(!"custom".equals(course.type))return LessonClock.matches(week,course.first,course.last,course.type);
+        if(course.weeks!=null)for(int selected:course.weeks)if(selected==week)return true;
+        return false;
+    }
+    public static List<Event> events(String firstMonday,int total,String[][] times,List<Course> courses,List<ScheduleDay.Adjustment> adjustments){
         List<Event> out=new ArrayList<>();LocalDate first;
         try{first=LocalDate.parse(firstMonday);LessonClock.validateTimes(times);}catch(Exception e){return out;}
         if(first.getDayOfWeek()!=DayOfWeek.MONDAY||total<1||total>30)return out;
         Set<String> seen=new HashSet<>();
-        for(Course c:courses){
-            if(c.day<1||c.day>7||c.start<1||c.start>12||times[c.start-1][0].isEmpty())continue;
-            for(int week=1;week<=total;week++)if(LessonClock.matches(week,c.first,c.last,c.type)){
-                long start=first.plusDays((week-1)*7L+c.day-1).atTime(LocalTime.parse(times[c.start-1][0])).atZone(LessonClock.ZONE).toInstant().toEpochMilli();
+        for(int week=1;week<=total;week++)for(int weekday=1;weekday<=7;weekday++){
+            LocalDate date=first.plusDays((week-1)*7L+weekday-1);
+            ScheduleDay.Resolved resolved=ScheduleDay.resolve(adjustments,date);
+            if(resolved.suspended)continue;
+            int sourceWeek=(int)Math.floorDiv(java.time.temporal.ChronoUnit.DAYS.between(first,resolved.source),7)+1;
+            for(Course c:courses){
+                if(c.day!=resolved.source.getDayOfWeek().getValue()||c.start<1||c.start>12||times[c.start-1][0].isEmpty()||!matches(c,sourceWeek))continue;
+                long start=date.atTime(LocalTime.parse(times[c.start-1][0])).atZone(LessonClock.ZONE).toInstant().toEpochMilli();
                 Event event=new Event(c,start);if(seen.add(event.key))out.add(event);
             }
         }

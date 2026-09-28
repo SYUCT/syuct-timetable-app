@@ -4,6 +4,8 @@ nav{z-index:5}
 .week-grid{display:grid;width:100%;min-width:0;align-items:start}
 .week-column{border-right:1px solid #e2eaf3}
 .week-heading{height:44px;display:grid;place-items:center;background:#eaf2fa;color:#24557f;font-weight:700;font-size:12px;position:sticky;top:0;z-index:3;border-bottom:1px solid #d9e4ef}
+.week-column>.week-heading{width:100%;border-radius:0;padding:0 1px;line-height:1.1}
+.week-column>.week-heading:disabled{opacity:1}
 .week-time-column{position:sticky;left:0;z-index:4;background:#f5f8fc}
 .week-time{height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;color:#5d7489;border-bottom:1px solid #e2eaf3}
 .week-time small{font-size:10px;margin-top:4px}
@@ -63,3 +65,21 @@ nav{z-index:5}
 .detail-label{flex:0 0 78px;color:#6b7e91}
 .detail-info p>span:last-child{flex:1;min-width:0;overflow-wrap:anywhere}
 #detailRoom{font-weight:500}
+.day-adjustment{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-8px 0 6px;color:#58738b;font-size:12px}
+.day-adjustment .text-button{padding:7px 2px;white-space:nowrap}
+.days button{font-size:12px;white-space:nowrap}
+.week-picker{margin:14px 0 4px;padding:14px;border:1px solid #dce9f5;border-radius:16px;background:#f6faff}
+.week-picker strong{display:block;font-size:13px;color:#24557f;margin-bottom:12px}
+.week-picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.week-picker-grid button{min-height:44px;border-radius:11px;background:white;color:#41647f;border:1px solid #d6e3f0;font-weight:700}
+.week-picker-grid button.chosen{background:#2469b2;color:white;border-color:#2469b2;box-shadow:0 4px 10px #2469b22a}
+.week-picker small{font-size:12px;line-height:1.6}
+.adjustment-badge{display:inline-block;border-radius:8px;padding:3px 7px;background:#fff0d9;color:#8c5b15;font-weight:750;font-size:11px;margin-bottom:5px}
+#adjustmentDialog{width:min(440px,calc(100% - 32px));max-height:calc(100dvh - 24px);overflow:auto;border:0;border-radius:22px;padding:22px;color:#173047;box-shadow:0 20px 60px #142e5140}
+#adjustmentDialog::backdrop{background:#12253688}
+#adjustmentDialog .muted{font-size:13px}
+.adjustment-preview{white-space:pre-line;background:#eef5fd;border:1px solid #d8e8f7;border-radius:14px;padding:14px;color:#365d7e;font-size:13px;line-height:1.7}
+#adjustmentError{min-height:18px;color:#a64a3c;font-size:13px}
+.adjustment-row{display:flex;align-items:center;gap:8px;border-top:1px solid #e7eef5;padding:11px 0}
+.adjustment-row div{flex:1;min-width:0}.adjustment-row strong,.adjustment-row small{display:block;overflow-wrap:anywhere}.adjustment-row strong{font-size:13px}.adjustment-row small{font-size:11px;margin-top:5px}
+.adjustment-row button{padding:8px 4px;font-size:12px}

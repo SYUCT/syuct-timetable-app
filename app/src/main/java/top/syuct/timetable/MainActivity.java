@@ -155,8 +155,24 @@ public class MainActivity extends Activity {
             for(String field : new String[]{"name", "teacher", "room"}) if(c.optString(field).length()>500) throw new JSONException("字段过长");
             int d=c.getInt("weekday"), a=c.getInt("startSection"), b=c.getInt("endSection"), x=c.getInt("startWeek"), y=c.getInt("endWeek");
             if(d<1||d>7||a<1||b>12||a>b||x<1||x>y||y>total) throw new JSONException("时间范围无效");
-            if(!java.util.Arrays.asList("all","odd","even").contains(c.getString("weekType"))) throw new JSONException("单双周无效");
+            String type=c.getString("weekType");
+            if(!java.util.Arrays.asList("all","odd","even","custom").contains(type)) throw new JSONException("周次规则无效");
+            if("custom".equals(type)){
+                JSONArray weeks=c.getJSONArray("weeks");
+                if(weeks.length()<1||weeks.length()>30)throw new JSONException("自选周次无效");
+                int previous=0;
+                for(int j=0;j<weeks.length();j++){
+                    int week=weeks.getInt(j);
+                    if(week<=previous||week>total)throw new JSONException("自选周次无效");
+                    previous=week;
+                }
+                if(weeks.getInt(0)!=x||previous!=y)throw new JSONException("自选周次范围无效");
+            }
         }
+        java.time.LocalDate first=null;
+        try{if(!s.optString("firstWeekDate").isEmpty())first=java.time.LocalDate.parse(s.getString("firstWeekDate"));}
+        catch(java.time.DateTimeException e){throw new JSONException("第一周日期无效");}
+        ScheduleDay.read(o,first,total);
         return o.toString();
     }
     public class LocalBridge {

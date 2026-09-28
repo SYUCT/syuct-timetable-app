@@ -213,6 +213,45 @@ const server=http.createServer((req,res)=>{
   fixtureHtml='<div class="login-container"><div class="login-blk"><div class="login-sec"><div class="login-form"><form><input type="password" value="unchanged"><button>登录</button></form></div></div></div></div>';
   await page.reload();await page.evaluate(loginLayout);await page.evaluate(loginLayout);assert.equal(await page.locator('#syuct-login-layout').count(),1);assert.equal(await page.locator('input').inputValue(),'unchanged');assert.equal(await page.locator('form button').innerText(),'登录');assert.equal(await page.locator('.login-blk').evaluate(n=>getComputedStyle(n).minHeight), '844px');
   fixtureHtml='<p>学生个人课表</p><table><tr><td>课程</td></tr></table>';await page.reload();await page.evaluate(loginLayout);assert.equal(await page.locator('#syuct-login-layout').count(),0);count++;console.log('PASS 只压缩本科登录页空白，不改表单值或已登录课表');
+  await page.goto(url);
+  await page.evaluate(()=>{
+    localStorage.setItem('test-state',JSON.stringify({settings:{semester:'测试学期',firstWeekDate:'2026-08-31',totalWeeks:20},courses:[
+      {name:'自选测试课',teacher:'教师甲',room:'应星楼402',weekday:1,startSection:1,endSection:2,startWeek:1,endWeek:7,weekType:'all',colorIndex:0},
+      {name:'目标日原课',teacher:'教师乙',room:'瑞师楼224',weekday:7,startSection:3,endSection:4,startWeek:3,endWeek:3,weekType:'all',colorIndex:1}
+    ],adjustments:[]}));
+  });
+  await page.reload();await page.locator('#weekSelect').selectOption('2');await page.locator('#toggleAll').click();
+  await page.locator('.week-course').filter({hasText:'自选测试课'}).click();await page.locator('#editDetail').click();
+  await page.locator('#detailFields [data-field="weekType"]').selectOption('custom');
+  for(const week of [3,6])await page.locator('#detailFields .week-picker-grid button').filter({hasText:new RegExp('^'+week+'$')}).click();
+  assert.match(await page.locator('#detailFields .week-picker').innerText(),/1、2、4、5、7/);
+  await page.locator('#saveDetail').click();
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')).courses[0].weeks),[1,2,4,5,7]);
+  await page.locator('#overviewWeek').selectOption('3');assert.equal(await page.locator('.week-course').filter({hasText:'自选测试课'}).count(),0);
+  await page.locator('#overviewWeek').selectOption('4');assert.equal(await page.locator('.week-course').filter({hasText:'自选测试课'}).count(),1);
+  count++;console.log('PASS 课程详情点选离散教学周，其他周不显示');
+  await page.locator('#overviewWeek').selectOption('3');await page.locator('.week-column>.week-heading').nth(6).click();
+  await page.locator('#adjustmentSource').fill('2026-09-07');await page.locator('#adjustmentTarget').fill('2026-09-20');
+  assert.match(await page.locator('#adjustmentPreview').innerText(),/自选测试课/);
+  await page.locator('#saveAdjustment').click();
+  assert.equal(await page.locator('.week-column').nth(6).locator('.week-course').filter({hasText:'自选测试课'}).count(),1);
+  assert.equal(await page.locator('.week-column').nth(6).locator('.week-course').filter({hasText:'目标日原课'}).count(),0);
+  assert.match(await page.locator('.week-column>.week-heading').nth(6).innerText(),/调/);
+  await page.locator('#overviewWeek').selectOption('2');assert.match(await page.locator('.week-column>.week-heading').nth(0).innerText(),/休/);
+  assert.equal(await page.locator('.week-column').nth(0).locator('.week-course').count(),0);
+  count++;console.log('PASS 点击星期栏调课，跨周按原日期课程替换目标日并标记调课与停课');
+  await page.locator('#closeOverview').click();await page.locator('nav [data-page="settings"]').click();
+  assert.equal(await page.locator('.adjustment-row').count(),1);
+  await page.locator('#exportBackup').click();const complete=await page.evaluate(()=>window.copied);
+  assert.equal(codec.decodeFullBackup(complete).adjustments.length,1);
+  await page.locator('#exportCode').click();const regular=codec.decodeShareCode(await page.evaluate(()=>window.copied));
+  assert.equal(regular.courses.length,4);assert.equal(regular.adjustments,undefined);
+  count++;console.log('PASS 完整备份保留调课，普通TT2准确拆分自选周且不暗含调课');
+  await page.locator('.adjustment-row button').last().click();assert.equal(await page.locator('.adjustment-row').count(),0);
+  await page.locator('nav [data-page="import"]').click();await page.locator('#import details summary').click();await page.locator('#importText').fill(complete);await page.locator('#parseText').click();
+  assert.equal(await page.locator('.edit-card').count(),2);await page.locator('#reviewed').check();await page.locator('#saveDraft').click();
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')).adjustments.length),1);
+  count++;console.log('PASS 取消调课可恢复，完整备份重新导入仍保留离散周和调课');
   assert.deepEqual(errors,[]);console.log('Browser tests passed: '+count);
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

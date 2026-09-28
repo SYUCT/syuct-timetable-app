@@ -9,6 +9,7 @@
   const PREFIX = 'SYUCT-TT2:';
   const MAX_CODE_LENGTH = 200000;
   const MAX_COURSES = 200;
+  const BACKUP_PREFIX = 'SYUCT-APP3:';
   const WEEK_TYPE_TO_CODE = { all: '0', odd: '1', even: '2' };
   const CODE_TO_WEEK_TYPE = { '0': 'all', '1': 'odd', '2': 'even' };
 
@@ -53,9 +54,17 @@
     const startWeek = requireInteger(value.startWeek, 1, 30, `第 ${index + 1} 条上课安排开始周`);
     const endWeek = requireInteger(value.endWeek, 1, 30, `第 ${index + 1} 条上课安排结束周`);
     if (endWeek < startWeek) throw new Error(`第 ${index + 1} 条上课安排周次无效`);
-    if (!Object.prototype.hasOwnProperty.call(WEEK_TYPE_TO_CODE, value.weekType)) throw new Error(`第 ${index + 1} 条上课安排单双周规则无效`);
+    if (value.weekType !== 'custom' && !Object.prototype.hasOwnProperty.call(WEEK_TYPE_TO_CODE, value.weekType)) throw new Error(`第 ${index + 1} 条上课安排周次规则无效`);
     const colorIndex = requireInteger(value.colorIndex, 0, 5, `第 ${index + 1} 条上课安排颜色`);
-    return {
+    let weeks;
+    if (value.weekType === 'custom') {
+      if (!Array.isArray(value.weeks) || !value.weeks.length || value.weeks.length > 30) throw new Error(`第 ${index + 1} 条上课安排须选择至少一周`);
+      weeks = value.weeks.map(week => requireInteger(week, 1, 30, `第 ${index + 1} 条上课安排自选周`));
+      if (new Set(weeks).size !== weeks.length || weeks.some((week, i) => i && week <= weeks[i - 1]) || weeks[0] !== startWeek || weeks[weeks.length - 1] !== endWeek) {
+        throw new Error(`第 ${index + 1} 条上课安排自选周次无效`);
+      }
+    }
+    const normalized = {
       name,
       teacher: compactText(value.teacher),
       room: compactText(value.room),
@@ -67,6 +76,19 @@
       weekType: value.weekType,
       colorIndex
     };
+    if (weeks) normalized.weeks = weeks;
+    return normalized;
+  }
+
+  function expandForShare(course) {
+    if (course.weekType !== 'custom') return [course];
+    const result = [];
+    for (const week of course.weeks) {
+      const previous = result[result.length - 1];
+      if (previous && previous.endWeek + 1 === week) previous.endWeek = week;
+      else result.push({ ...course, startWeek: week, endWeek: week, weekType: 'all' });
+    }
+    return result;
   }
 
   function encodeShareCode(payload) {
@@ -77,13 +99,14 @@
     const totalWeeks = requireInteger(settings.totalWeeks, 1, 30, '学期总周数');
     const courses = Array.isArray(input.courses) ? input.courses : [];
     if (courses.length > MAX_COURSES) throw new Error('课程数量超过 200 条上限');
+    const expanded = courses.flatMap((course, index) => expandForShare(normalizeCourse(course, index)));
+    if (expanded.length > MAX_COURSES) throw new Error('自选周次拆分后超过 200 条课表码安排上限');
 
     let body = packText(semester);
     body += packText(firstWeekDate);
     body += base36Digit(totalWeeks);
-    body += `${courses.length.toString(36)}:`;
-    courses.forEach((rawCourse, index) => {
-      const course = normalizeCourse(rawCourse, index);
+    body += `${expanded.length.toString(36)}:`;
+    expanded.forEach((course) => {
       body += packText(course.name);
       body += packText(course.teacher);
       body += packText(course.room);
@@ -186,12 +209,40 @@
     return String(text == null ? '' : text).replace(/^\uFEFF/, '').trim().startsWith(PREFIX);
   }
 
+  function encodeFullBackup(state) {
+    const body = JSON.stringify(state);
+    if (!body || body.length > MAX_CODE_LENGTH) throw new Error('完整备份过长');
+    return `${BACKUP_PREFIX}${checksum(body)}:${body}`;
+  }
+
+  function decodeFullBackup(text) {
+    const source = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
+    if (!source.startsWith(BACKUP_PREFIX) || source.length > MAX_CODE_LENGTH + 22) throw new Error('不是有效的 App 完整备份');
+    const rest = source.slice(BACKUP_PREFIX.length);
+    if (!/^[0-9a-f]{8}:/.test(rest)) throw new Error('完整备份校验值损坏');
+    const body = rest.slice(9);
+    if (checksum(body) !== rest.slice(0, 8)) throw new Error('完整备份内容不完整或已被修改');
+    let value;
+    try { value = JSON.parse(body); } catch { throw new Error('完整备份数据损坏'); }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('完整备份数据无效');
+    return value;
+  }
+
+  function isFullBackup(text) {
+    return String(text == null ? '' : text).replace(/^\uFEFF/, '').trim().startsWith(BACKUP_PREFIX);
+  }
+
   return {
     PREFIX,
+    BACKUP_PREFIX,
     checksum,
     packText,
+    normalizeCourse,
     encodeShareCode,
     decodeShareCode,
-    isShareCode
+    isShareCode,
+    encodeFullBackup,
+    decodeFullBackup,
+    isFullBackup
   };
 });

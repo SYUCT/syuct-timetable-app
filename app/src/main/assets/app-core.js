@@ -6,23 +6,50 @@
   root.AppCore=api;
 })(globalThis,function(codec,undergraduate,defaultTimes){
   'use strict';
-  const blank=()=>({settings:{semester:'',firstWeekDate:'',totalWeeks:20},courses:[]});
+  const blank=()=>({settings:{semester:'',firstWeekDate:'',totalWeeks:20},courses:[],adjustments:[]});
   const weekdays=['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
+  const DAY_MS=86400000;
+  function dateDay(value){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw Error('请选择有效的调课日期。');
+    const [year,month,day]=value.split('-').map(Number),ms=Date.UTC(year,month-1,day);
+    if(new Date(ms).toISOString().slice(0,10)!==value) throw Error('调课日期不存在。');
+    return ms;
+  }
+  function validateAdjustments(raw,settings){
+    if(raw===undefined)return [];
+    if(!Array.isArray(raw)||raw.length>50)throw Error('调课记录最多 50 条。');
+    if(raw.length&&!settings.firstWeekDate)throw Error('请先设置第一周周一，才能按日期调课。');
+    const first=settings.firstWeekDate?dateDay(settings.firstWeekDate):0,used=new Set();
+    return raw.map((item,index)=>{
+      if(!item||typeof item!=='object')throw Error('第 '+(index+1)+' 条调课记录无效。');
+      const sourceDate=String(item.sourceDate||''),targetDate=String(item.targetDate||'');
+      const source=dateDay(sourceDate),target=dateDay(targetDate),end=first+settings.totalWeeks*7*DAY_MS;
+      if(source===target)throw Error('调课的原日期和目标日期不能相同。');
+      if(source<first||source>=end||target<first||target>=end)throw Error('调课日期必须在本学期内。');
+      if(used.has(sourceDate)||used.has(targetDate))throw Error('一个日期不能同时参与多条调课，请先取消原记录。');
+      used.add(sourceDate);used.add(targetDate);
+      if(item.suspendSource!==true&&item.suspendSource!==false)throw Error('请确认原日期是否停课。');
+      return {sourceDate,targetDate,suspendSource:item.suspendSource};
+    });
+  }
   function validate(state){
-    const decoded=codec.decodeShareCode(codec.encodeShareCode(state));
+    if(!state||!Array.isArray(state.courses))throw Error('课表数据无效。');
+    const courses=state.courses.map((course,index)=>codec.normalizeCourse(course,index));
+    const decoded=codec.decodeShareCode(codec.encodeShareCode({...state,courses}));
     const s=decoded.settings;
     if(s.firstWeekDate){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(s.firstWeekDate)) throw Error('请选择有效的第一周周一日期。');
       const [y,m,d]=s.firstWeekDate.split('-').map(Number), date=new Date(y,m-1,d);
       if(date.getFullYear()!==y || date.getMonth()!==m-1 || date.getDate()!==d || date.getDay()!==1) throw Error('第一周日期必须是周一。');
     }
-    decoded.courses.forEach(c=>{
+    courses.forEach(c=>{
       if(c.endWeek>s.totalWeeks) throw Error('课程结束周超过学期总周数，请核对。');
-      if(c.weekType!=='all' && !Array.from({length:c.endWeek-c.startWeek+1},(_,i)=>i+c.startWeek).some(w=>w%2===(c.weekType==='odd'?1:0))) throw Error('单双周与课程周次不符。');
+      if(c.weekType==='custom'&&c.weeks.some(w=>w>s.totalWeeks))throw Error('自选周次超过学期总周数，请核对。');
+      if((c.weekType==='odd'||c.weekType==='even') && !Array.from({length:c.endWeek-c.startWeek+1},(_,i)=>i+c.startWeek).some(w=>w%2===(c.weekType==='odd'?1:0))) throw Error('单双周与课程周次不符。');
       if([c.name,c.teacher,c.room].some(v=>v.length>40)) throw Error('课程名、教师、教室分别最多 40 字，以兼容小程序。');
     });
     s.periodTimes=validateTimes(state.settings?.periodTimes || defaultTimes);
-    return {settings:s,courses:decoded.courses};
+    return {settings:s,courses,adjustments:validateAdjustments(state.adjustments,s)};
   }
   function ranges(values,step=1){
     const out=[];
@@ -199,7 +226,31 @@
     const today=schoolClock(now).day;
     return Math.floor((today-Date.UTC(y,m-1,d))/604800000)+1;
   }
-  function inWeek(c,w){return c.startWeek<=w && w<=c.endWeek && (c.weekType==='all' || w%2===(c.weekType==='odd'?1:0));}
+  function inWeek(c,w){
+    if(c.weekType==='custom')return Array.isArray(c.weeks)&&c.weeks.includes(w);
+    return c.startWeek<=w && w<=c.endWeek && (c.weekType==='all' || w%2===(c.weekType==='odd'?1:0));
+  }
+  function weekForDate(settings,date){
+    if(!settings.firstWeekDate)return null;
+    return Math.floor((dateDay(date)-dateDay(settings.firstWeekDate))/(7*DAY_MS))+1;
+  }
+  function dateForWeekday(settings,week,weekday){
+    if(!settings.firstWeekDate||week<1||week>settings.totalWeeks||weekday<1||weekday>7)return null;
+    return new Date(dateDay(settings.firstWeekDate)+((week-1)*7+weekday-1)*DAY_MS).toISOString().slice(0,10);
+  }
+  function effectiveDay(state,date){
+    const day=dateDay(date),targetWeek=weekForDate(state.settings,date);
+    const targetWeekday=new Date(day).getUTCDay()||7;
+    const adjustments=state.adjustments||[];
+    const target=adjustments.find(a=>a.targetDate===date);
+    const stopped=!target&&adjustments.find(a=>a.sourceDate===date&&a.suspendSource);
+    const sourceDate=target?target.sourceDate:date;
+    const sourceWeek=weekForDate(state.settings,sourceDate);
+    const sourceWeekday=new Date(dateDay(sourceDate)).getUTCDay()||7;
+    const courses=stopped||sourceWeek===null||sourceWeek<1||sourceWeek>state.settings.totalWeeks?[]:
+      state.courses.flatMap((course,index)=>course.weekday===sourceWeekday&&inWeek(course,sourceWeek)?[{...course,weekday:targetWeekday,sourceIndex:index,sourceDate,adjusted:!!target}]:[]);
+    return {date,sourceDate,targetWeek,status:target?'adjusted':stopped?'suspended':'normal',courses};
+  }
   function minute(t){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))throw Error('上课时间应为有效的时:分。');const [h,m]=t.split(':').map(Number);return h*60+m;}
   function validateTimes(times){
     if(!Array.isArray(times)||times.length!==12)throw Error('节次时间表必须有 12 行。');
@@ -219,6 +270,14 @@
       const pair=times[s-1];if(pair?.[0]&&pair?.[1]&&clock.minute>=minute(pair[0])&&clock.minute<minute(pair[1]))return true;
     }return false;
   }
+  function activeAt(c,settings,date,now=new Date()){
+    const clock=schoolClock(now);
+    if(clock.date!==date)return false;
+    const times=settings.periodTimes||defaultTimes;
+    for(let s=c.startSection;s<=c.endSection;s++){
+      const pair=times[s-1];if(pair?.[0]&&pair?.[1]&&clock.minute>=minute(pair[0])&&clock.minute<minute(pair[1]))return true;
+    }return false;
+  }
   function layoutWeek(courses){
     const output=[];
     for(let d=1;d<=7;d++){
@@ -227,5 +286,5 @@
       output.push({weekday:d,lanes:Math.max(1,ends.length),items:placed});
     }return output;
   }
-  return {blank,validate,graduate,undergraduateHome,parseCapture,numbers,ranges,currentWeek,inWeek,weekdays,defaultTimes,schoolClock,validateTimes,active,layoutWeek};
+  return {blank,validate,graduate,undergraduateHome,parseCapture,numbers,ranges,currentWeek,inWeek,weekForDate,dateForWeekday,effectiveDay,weekdays,defaultTimes,schoolClock,validateTimes,active,activeAt,layoutWeek};
 });

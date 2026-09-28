@@ -37,8 +37,14 @@ public final class CourseReminder extends BroadcastReceiver {
             JSONObject s=state.getJSONObject("settings");JSONArray raw=state.getJSONArray("courses");
             String[][] times=WidgetState.readTimes(s.has("periodTimes")?s.getJSONArray("periodTimes"):new JSONArray(WidgetState.defaults(c)));
             List<ReminderPlanner.Course> courses=new ArrayList<>();
-            for(int i=0;i<raw.length();i++){JSONObject x=raw.getJSONObject(i);courses.add(new ReminderPlanner.Course(x.getString("name"),x.optString("room"),x.optString("teacher"),x.getString("weekType"),x.getInt("weekday"),x.getInt("startSection"),x.getInt("startWeek"),x.getInt("endWeek")));}
-            return ReminderPlanner.events(s.optString("firstWeekDate"),s.getInt("totalWeeks"),times,courses);
+            for(int i=0;i<raw.length();i++){
+                JSONObject x=raw.getJSONObject(i);int[] weeks=null;
+                if("custom".equals(x.getString("weekType"))){JSONArray selected=x.getJSONArray("weeks");weeks=new int[selected.length()];for(int j=0;j<weeks.length;j++)weeks[j]=selected.getInt(j);}
+                courses.add(new ReminderPlanner.Course(x.getString("name"),x.optString("room"),x.optString("teacher"),x.getString("weekType"),x.getInt("weekday"),x.getInt("startSection"),x.getInt("startWeek"),x.getInt("endWeek"),weeks));
+            }
+            String first=s.optString("firstWeekDate");
+            LocalDate firstDate=first.isEmpty()?null:LocalDate.parse(first);
+            return ReminderPlanner.events(first,s.getInt("totalWeeks"),times,courses,ScheduleDay.read(state,firstDate,s.getInt("totalWeeks")));
         }catch(Exception e){return Collections.emptyList();}
     }
     static synchronized void schedule(Context c){

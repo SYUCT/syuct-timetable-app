@@ -1,4 +1,5 @@
 import top.syuct.timetable.ReminderPlanner;
+import top.syuct.timetable.ScheduleDay;
 import java.time.*;
 import java.util.*;
 public class ReminderPlannerTest {
@@ -47,6 +48,20 @@ public class ReminderPlannerTest {
   check(ReminderPlanner.pending(simultaneous,due,Set.of(simultaneous.get(0).key)).size()==1);
   var mixed=new ArrayList<>(afternoon);mixed.addAll(events);
   check(ReminderPlanner.pending(mixed,reopen,Set.of()).size()==1);
+  var sparse=new ReminderPlanner.Course("离散周","测试楼101","张老师","custom",1,1,1,7,new int[]{1,2,4,5,7});
+  var sparseEvents=ReminderPlanner.events("2026-08-31",20,times,List.of(sparse));
+  check(sparseEvents.size()==5);
+  check(sparseEvents.get(2).start==at("2026-09-21T08:00:00"));
+  var moved=new ReminderPlanner.Course("调出的课","测试楼101","李老师","custom",1,1,2,2,new int[]{2});
+  var normalTarget=course("目标日原课",4,1,"all");
+  var swap=new ScheduleDay.Adjustment(LocalDate.parse("2026-09-07"),LocalDate.parse("2026-09-24"),true);
+  var adjusted=ReminderPlanner.events("2026-08-31",20,times,List.of(moved,normalTarget),List.of(swap));
+  check(adjusted.stream().noneMatch(e->e.course.name.equals("调出的课")&&e.start==at("2026-09-07T08:00:00")));
+  check(adjusted.stream().anyMatch(e->e.course.name.equals("调出的课")&&e.start==at("2026-09-24T08:00:00")));
+  check(adjusted.stream().noneMatch(e->e.course.name.equals("目标日原课")&&e.start==at("2026-09-24T08:00:00")));
+  check(ReminderPlanner.events("2026-08-31",20,times,List.of(moved),List.of(new ScheduleDay.Adjustment(swap.source,swap.target,false))).stream().filter(e->e.course.name.equals("调出的课")).count()==2);
+  check(ScheduleDay.resolve(List.of(swap),swap.source).suspended);
+  check(ScheduleDay.resolve(List.of(swap),swap.target).source.equals(swap.source));
   c.first=2;c.last=17;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).size()==16);
   times[0]=new String[]{"08:20","08:50"};check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).get(0).remind==at("2026-09-07T08:05:00"));
   times[0]=new String[]{"00:10","00:50"};c.first=1;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).get(0).remind==at("2026-08-30T23:55:00"));

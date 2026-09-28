@@ -92,6 +92,43 @@ test('重复DOM表格只导入一次；不同表格不合并',()=>{
 });
 test('跨域框架失败关闭',()=>assert.throws(()=>C.parseCapture({kind:'graduate',tables:[grad()],unreadableFrames:1})));
 test('TT2往返不丢时间与楼名',()=>{const s=C.validate({settings:C.blank().settings,courses:[course]});assert.deepEqual(C.validate(codec.decodeShareCode(codec.encodeShareCode(s))),s);});
+test('自选周次精确保留，普通 TT2 课表码仍能表示所有实际上课周',()=>{
+ const selected={...course,startWeek:1,endWeek:7,weekType:'custom',weeks:[1,2,4,5,7]};
+ const state=C.validate({settings:C.blank().settings,courses:[selected]});
+ assert.deepEqual(state.courses[0].weeks,[1,2,4,5,7]);
+ for(let week=1;week<=7;week++)assert.equal(C.inWeek(state.courses[0],week),selected.weeks.includes(week));
+ const restored=codec.decodeShareCode(codec.encodeShareCode(state));
+ assert.deepEqual(expand(restored.courses),expand(state.courses));
+ assert.equal(restored.courses.length,3);
+});
+test('自选周次不允许空选、重复、乱序或超出总周数',()=>{
+ const base={...course,startWeek:1,endWeek:7,weekType:'custom'};
+ for(const weeks of [[],[1,1,7],[2,1,7],[1,2,8]])assert.throws(()=>C.validate({settings:C.blank().settings,courses:[{...base,weeks}]}));
+ assert.throws(()=>C.validate({settings:{...C.blank().settings,totalWeeks:5},courses:[{...base,startWeek:1,endWeek:7,weeks:[1,7]}]}));
+});
+test('跨周调课按原日期周次取课，目标日原课被覆盖，原日期停课',()=>{
+ const settings={...C.blank().settings,firstWeekDate:'2026-08-31'};
+ const moved={...course,name:'源日课程',weekday:1,startWeek:2,endWeek:2,weekType:'custom',weeks:[2]};
+ const replaced={...course,name:'目标日原课',weekday:7,startWeek:3,endWeek:3};
+ const state=C.validate({settings,courses:[moved,replaced],adjustments:[{sourceDate:'2026-09-07',targetDate:'2026-09-20',suspendSource:true}]});
+ assert.deepEqual(C.effectiveDay(state,'2026-09-20').courses.map(c=>c.name),['源日课程']);
+ assert.equal(C.effectiveDay(state,'2026-09-20').courses[0].weekday,7);
+ assert.equal(C.effectiveDay(state,'2026-09-20').sourceDate,'2026-09-07');
+ assert.deepEqual(C.effectiveDay(state,'2026-09-07').courses,[]);
+ assert.equal(C.effectiveDay(state,'2026-09-07').status,'suspended');
+ const keep=C.validate({...state,adjustments:[{sourceDate:'2026-09-07',targetDate:'2026-09-20',suspendSource:false}]});
+ assert.equal(C.effectiveDay(keep,'2026-09-07').courses.length,1);
+});
+test('调课校验冲突和日期，完整备份往返保留，TT2 只导出常规课程',()=>{
+ const settings={...C.blank().settings,firstWeekDate:'2026-08-31'};
+ const adjustment={sourceDate:'2026-09-07',targetDate:'2026-09-20',suspendSource:true};
+ const state=C.validate({settings,courses:[course],adjustments:[adjustment]});
+ assert.deepEqual(C.validate(codec.decodeFullBackup(codec.encodeFullBackup(state))),state);
+ assert.equal(codec.decodeShareCode(codec.encodeShareCode(state)).courses.length,1);
+ assert.throws(()=>C.validate({settings,courses:[course],adjustments:[adjustment,{sourceDate:'2026-09-20',targetDate:'2026-09-21',suspendSource:true}]}));
+ assert.throws(()=>C.validate({settings,courses:[course],adjustments:[{...adjustment,targetDate:'2027-06-01'}]}));
+ assert.throws(()=>codec.decodeFullBackup(codec.encodeFullBackup(state)+'x'));
+});
 test('校验总周与第一周日期',()=>{
  for(const firstWeekDate of ['2026-09-01','2026-02-30','bad'])assert.throws(()=>C.validate({settings:{...C.blank().settings,firstWeekDate},courses:[]}));
  assert.equal(C.validate({settings:{...C.blank().settings,firstWeekDate:'2026-08-31'},courses:[]}).settings.firstWeekDate,'2026-08-31');
