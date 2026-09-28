@@ -25,7 +25,7 @@ jobs:
       - run: npm run test:browser
       - run: |
           mkdir -p test-results
-          javac -d test-results tests/PolicyTest.java tests/LessonClockTest.java tests/ReminderPlannerTest.java tests/UpdatePolicyTest.java app/src/main/java/top/syuct/timetable/Policy.java app/src/main/java/top/syuct/timetable/LessonClock.java app/src/main/java/top/syuct/timetable/ReminderPlanner.java app/src/main/java/top/syuct/timetable/UpdatePolicy.java
+          javac -d test-results tests/PolicyTest.java tests/LessonClockTest.java tests/ReminderPlannerTest.java tests/UpdatePolicyTest.java app/src/main/java/top/syuct/timetable/Policy.java app/src/main/java/top/syuct/timetable/LessonClock.java app/src/main/java/top/syuct/timetable/ReminderPlanner.java app/src/main/java/top/syuct/timetable/ScheduleDay.java app/src/main/java/top/syuct/timetable/UpdatePolicy.java
           java -cp test-results PolicyTest
           java -cp test-results LessonClockTest
           java -cp test-results ReminderPlannerTest

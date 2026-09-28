@@ -172,7 +172,7 @@ public class MainActivity extends Activity {
         java.time.LocalDate first=null;
         try{if(!s.optString("firstWeekDate").isEmpty())first=java.time.LocalDate.parse(s.getString("firstWeekDate"));}
         catch(java.time.DateTimeException e){throw new JSONException("第一周日期无效");}
-        ScheduleDay.read(o,first,total);
+        ScheduleDayData.read(o,first,total);
         return o.toString();
     }
     public class LocalBridge {

@@ -39,14 +39,14 @@ final class WidgetState {
             if(week<1||week>settings.getInt("totalWeeks")){s.empty="当前日期不在本学期内";return s;}
             s.heading="第 "+week+" 周";
             LocalDate firstDate=LocalDate.parse(first),today=s.now.toLocalDate();
-            ScheduleDay.Resolved day=ScheduleDay.resolve(ScheduleDay.read(state,firstDate,settings.getInt("totalWeeks")),today);
+            ScheduleDay.Resolved day=ScheduleDay.resolve(ScheduleDayData.read(state,firstDate,settings.getInt("totalWeeks")),today);
             if(day.suspended){s.heading="停课";s.empty="本日课程已调出";return s;}
             int sourceWeek=(int)Math.floorDiv(java.time.temporal.ChronoUnit.DAYS.between(firstDate,day.source),7)+1;
             if(day.adjusted)s.heading="调课 · 按"+day.source.format(DateTimeFormatter.ofPattern("M月d日"))+"课表";
             JSONArray courses=state.getJSONArray("courses");
             for(int i=0;i<courses.length();i++){
                 JSONObject c=courses.getJSONObject(i);
-                if(c.getInt("weekday")!=day.source.getDayOfWeek().getValue()||!ScheduleDay.matches(c,sourceWeek))continue;
+                if(c.getInt("weekday")!=day.source.getDayOfWeek().getValue()||!ScheduleDayData.matches(c,sourceWeek))continue;
                 Course entry=new Course();entry.name=c.getString("name");entry.room=c.optString("room","");entry.start=c.getInt("startSection");entry.end=c.getInt("endSection");
                 entry.active=LessonClock.active(entry.start,entry.end,s.times,s.now);s.today.add(entry);
             }

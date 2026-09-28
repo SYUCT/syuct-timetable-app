@@ -44,7 +44,7 @@ public final class CourseReminder extends BroadcastReceiver {
             }
             String first=s.optString("firstWeekDate");
             LocalDate firstDate=first.isEmpty()?null:LocalDate.parse(first);
-            return ReminderPlanner.events(first,s.getInt("totalWeeks"),times,courses,ScheduleDay.read(state,firstDate,s.getInt("totalWeeks")));
+            return ReminderPlanner.events(first,s.getInt("totalWeeks"),times,courses,ScheduleDayData.read(state,firstDate,s.getInt("totalWeeks")));
         }catch(Exception e){return Collections.emptyList();}
     }
     static synchronized void schedule(Context c){
