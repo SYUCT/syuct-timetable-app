@@ -18,6 +18,15 @@ test('本科读取对象复用原解析器并保留诊断',()=>{
  const r=C.parseCapture({kind:'undergraduate',tables:[{text:fixture}],supplemental:['未排课：测试课程'],unreadableFrames:0});
  assert.equal(r.courses.length,20);assert.ok(r.notices.length);assert.ok(r.supplemental.length);
 });
+test('本科直写双周与编码空格经实际导入和课表码保留',()=>{
+ const text=fixture.replace('\n\n','\n&#x20;\n\n').replaceAll('第2-10周|双周','第2-16周双周');
+ const r=C.parseCapture({kind:'undergraduate',tables:[{text}]});
+ assert.equal(r.courses.length,20);
+ const entry=r.courses.find(c=>c.name==='电工学'&&c.weekday===1);
+ assert.deepEqual([entry.startWeek,entry.endWeek,entry.weekType],[2,16,'even']);
+ const restored=codec.decodeShareCode(codec.encodeShareCode({settings:C.blank().settings,courses:r.courses}));
+ assert.deepEqual(expand(restored.courses),expand(r.courses));
+});
 test('未带星期网格的首页文本仍拒绝，不猜测星期',()=>assert.throws(()=>C.parseCapture({kind:'undergraduate',tables:[{text:'课表\n星期一\n1-2节 (1-13|单周)有机化学AI通明楼138\n星期六星期日'}]})));
 test('硕士保留楼号和教室号',()=>assert.deepEqual(C.graduate(grad()).courses[0],course));
 test('离散周次和节次不得补齐',()=>{

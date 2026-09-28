@@ -37,13 +37,16 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#weekSelect option').count(),20);count++;console.log('PASS 默认20周，空状态');
   await page.locator('nav [data-page="import"]').click();await page.locator('[data-school="undergraduate"]').click();
   assert.equal(await page.evaluate(()=>window.openedSchool),'undergraduate');count++;console.log('PASS 本科原生入口');
-  await page.locator('#import details summary').click();await page.locator('#importText').fill(fixture);await page.locator('#parseText').click();
+  const directParityFixture=fixture.replace('\n\n','\n&#x20;\n\n').replaceAll('第2-10周|双周','第2-16周双周');
+  await page.locator('#import details summary').click();await page.locator('#importText').fill(directParityFixture);await page.locator('#parseText').click();
   assert.equal(await page.locator('.edit-card').count(),20);assert.equal(await page.locator('#saveDraft').isDisabled(),true);count++;console.log('PASS 样本读取进入20条核对，不自动保存');
   await page.locator('#reviewed').check();await page.locator('.edit-card [data-field="room"]').first().fill('通明楼138（已核对）');
   assert.equal(await page.locator('#reviewed').isChecked(),false);assert.equal(await page.locator('#saveDraft').isDisabled(),true);count++;console.log('PASS 编辑后撤销确认，不使用旧结果');
   await page.locator('#reviewed').check();await page.locator('#saveDraft').click();
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')));
-  assert.equal(saved.courses.length,20);assert.equal(saved.courses[0].room,'通明楼138（已核对）');assert.equal(saved.settings.totalWeeks,20);assert.equal(saved.settings.semester,'');count++;console.log('PASS 空学期和日期可保存，持久化采用新结果');
+  assert.equal(saved.courses.length,20);assert.equal(saved.courses[0].room,'通明楼138（已核对）');assert.equal(saved.settings.totalWeeks,20);assert.equal(saved.settings.semester,'');
+  const directParity=saved.courses.find(c=>c.name==='电工学'&&c.weekday===1);
+  assert.deepEqual([directParity.startWeek,directParity.endWeek,directParity.weekType],[2,16,'even']);count++;console.log('PASS 编码空格及直写双周经导入核对保存');
   await page.reload();assert.match(await page.locator('#weekHint').innerText(),/未设置/);
   await page.locator('#toggleAll').click();await page.locator('#overviewNow').click();assert.equal(await page.locator('.week-course.is-outside-week').count(),0);await page.locator('#overviewNow').click();await page.locator('#closeOverview').click();count++;console.log('PASS 日期未设置时不误标非本周');
   await page.locator('nav [data-page="settings"]').click();await page.locator('#exportCode').click();
