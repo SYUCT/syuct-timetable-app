@@ -10,17 +10,17 @@ public class ReminderPlannerTest {
  public static void main(String[] args){
   String[][] times={{"08:00","08:50"},{"09:00","09:50"},{"10:10","11:00"},{"11:10","12:00"},{"13:30","14:20"},{"14:30","15:20"},{"15:40","16:30"},{"16:40","17:30"},{"18:30","19:20"},{"19:30","20:20"},{"",""},{"",""}};
   var c=course("课程甲",1,1,"all");var events=ReminderPlanner.events("2026-08-31",20,times,List.of(c));
-  check(events.size()==20);check(events.get(0).start==at("2026-08-31T08:00:00"));check(events.get(0).remind==at("2026-08-31T07:45:00"));
+  check(events.size()==19);check(events.get(0).start==at("2026-08-31T08:00:00"));check(events.get(0).remind==at("2026-08-31T07:45:00"));
   check(c.teacher.equals(""));
   var withTeacher=new ReminderPlanner.Course(c.name,c.room,"张老师",c.type,c.day,c.start,c.first,c.last);
   var teacherEvents=ReminderPlanner.events("2026-08-31",20,times,List.of(withTeacher));
   check(teacherEvents.get(0).course.teacher.equals("张老师"));
   check(teacherEvents.get(0).key.equals(events.get(0).key)); // Keep pre-upgrade sent journal stable.
   check(teacherEvents.get(0).start-teacherEvents.get(0).remind==900000);
-  check(ReminderPlanner.events("2026-08-31",20,times,List.of(c,c)).size()==20);
+  check(ReminderPlanner.events("2026-08-31",20,times,List.of(c,c)).size()==19);
   check(ReminderPlanner.events("",20,times,List.of(c)).isEmpty());check(ReminderPlanner.events("2026-09-01",20,times,List.of(c)).isEmpty());
   var odd=ReminderPlanner.events("2026-08-31",20,times,List.of(course("单周",1,1,"odd")));check(odd.size()==10);check(odd.get(1).start==at("2026-09-14T08:00:00"));
-  var even=ReminderPlanner.events("2026-08-31",20,times,List.of(course("双周",1,1,"even")));check(even.size()==10);check(even.get(0).start==at("2026-09-07T08:00:00"));
+  var even=ReminderPlanner.events("2026-08-31",20,times,List.of(course("双周",1,1,"even")));check(even.size()==9);check(even.get(0).start==at("2026-09-07T08:00:00"));
   check(ReminderPlanner.next(events,at("2026-08-31T07:44:59"))==events.get(0).remind);
   check(ReminderPlanner.next(events,at("2026-08-31T07:45:00"))==events.get(1).remind);
   check(ReminderPlanner.next(events,at("2027-03-01T00:00:00"))==0);
@@ -62,7 +62,18 @@ public class ReminderPlannerTest {
   check(ReminderPlanner.events("2026-08-31",20,times,List.of(moved),List.of(new ScheduleDay.Adjustment(swap.source,swap.target,false))).stream().filter(e->e.course.name.equals("调出的课")).count()==2);
   check(ScheduleDay.resolve(List.of(swap),swap.source).suspended);
   check(ScheduleDay.resolve(List.of(swap),swap.target).source.equals(swap.source));
-  c.first=2;c.last=17;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).size()==16);
+  var nationalRest=LocalDate.parse("2026-10-01");
+  check(ScheduleDay.resolve(List.of(),nationalRest).holiday);
+  check(!ScheduleDay.isPublicRestDay(LocalDate.parse("2026-09-28")));
+  check(!ScheduleDay.isPublicRestDay(LocalDate.parse("2027-01-01")));
+  var holidayCourse=course("国庆当天课程",4,1,"all");
+  var holidayEvents=ReminderPlanner.events("2026-08-31",20,times,List.of(holidayCourse));
+  check(holidayEvents.stream().noneMatch(e->e.start==at("2026-10-01T08:00:00")));
+  check(holidayEvents.stream().anyMatch(e->e.start==at("2026-09-24T08:00:00")));
+  var fromRest=new ScheduleDay.Adjustment(nationalRest,LocalDate.parse("2026-10-09"),true);
+  check(ScheduleDay.resolve(List.of(fromRest),nationalRest).holiday);
+  check(ReminderPlanner.events("2026-08-31",20,times,List.of(holidayCourse),List.of(fromRest)).stream().anyMatch(e->e.start==at("2026-10-09T08:00:00")));
+  c.first=2;c.last=17;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).size()==15);
   times[0]=new String[]{"08:20","08:50"};check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).get(0).remind==at("2026-09-07T08:05:00"));
   times[0]=new String[]{"00:10","00:50"};c.first=1;check(ReminderPlanner.events("2026-08-31",20,times,List.of(c)).get(0).remind==at("2026-08-30T23:55:00"));
   var midnight=ReminderPlanner.events("2026-08-31",20,times,List.of(c));

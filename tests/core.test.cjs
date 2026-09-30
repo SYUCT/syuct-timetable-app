@@ -119,6 +119,23 @@ test('跨周调课按原日期周次取课，目标日原课被覆盖，原日�
  const keep=C.validate({...state,adjustments:[{sourceDate:'2026-09-07',targetDate:'2026-09-20',suspendSource:false}]});
  assert.equal(C.effectiveDay(keep,'2026-09-07').courses.length,1);
 });
+test('已公布的2026全国公休日取消当天课程并单独标记，学校延假不被猜测',()=>{
+ const settings={...C.blank().settings,firstWeekDate:'2026-08-31'};
+ const thursday={...course,weekday:4,startWeek:1,endWeek:20};
+ const monday={...course,name:'周一课',weekday:1,startWeek:1,endWeek:20};
+ const state=C.validate({settings,courses:[thursday,monday]});
+ assert.equal(C.isPublicRestDay('2026-09-25'),true);
+ assert.equal(C.isPublicRestDay('2026-09-28'),false);
+ assert.equal(C.isPublicRestDay('2026-10-07'),true);
+ assert.equal(C.isPublicRestDay('2027-01-01'),false);
+ assert.deepEqual(C.effectiveDay(state,'2026-10-01').courses,[]);
+ assert.equal(C.effectiveDay(state,'2026-10-01').status,'holiday');
+ assert.deepEqual(C.effectiveDay(state,'2026-09-28').courses.map(c=>c.name),['周一课']);
+ const moved=C.validate({...state,adjustments:[{sourceDate:'2026-10-01',targetDate:'2026-10-09',suspendSource:true}]});
+ assert.equal(C.effectiveDay(moved,'2026-10-01').status,'holiday');
+ assert.equal(C.effectiveDay(moved,'2026-10-09').status,'adjusted');
+ assert.deepEqual(C.effectiveDay(moved,'2026-10-09').courses.map(c=>c.name),[course.name]);
+});
 test('调课校验冲突和日期，完整备份往返保留，TT2 只导出常规课程',()=>{
  const settings={...C.blank().settings,firstWeekDate:'2026-08-31'};
  const adjustment={sourceDate:'2026-09-07',targetDate:'2026-09-20',suspendSource:true};

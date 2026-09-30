@@ -237,7 +237,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.week-column').nth(6).locator('.week-course').filter({hasText:'自选测试课'}).count(),1);
   assert.equal(await page.locator('.week-column').nth(6).locator('.week-course').filter({hasText:'目标日原课'}).count(),0);
   assert.match(await page.locator('.week-column>.week-heading').nth(6).innerText(),/调/);
-  await page.locator('#overviewWeek').selectOption('2');assert.match(await page.locator('.week-column>.week-heading').nth(0).innerText(),/休/);
+  await page.locator('#overviewWeek').selectOption('2');assert.match(await page.locator('.week-column>.week-heading').nth(0).innerText(),/调课迁出/);
   assert.equal(await page.locator('.week-column').nth(0).locator('.week-course').count(),0);
   count++;console.log('PASS 点击星期栏调课，跨周按原日期课程替换目标日并标记调课与停课');
   await page.locator('#closeOverview').click();await page.locator('nav [data-page="settings"]').click();
@@ -252,6 +252,20 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.edit-card').count(),2);await page.locator('#reviewed').check();await page.locator('#saveDraft').click();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-state')).adjustments.length),1);
   count++;console.log('PASS 取消调课可恢复，完整备份重新导入仍保留离散周和调课');
+  await page.evaluate(()=>localStorage.setItem('test-state',JSON.stringify({settings:{semester:'国庆测试',firstWeekDate:'2026-08-31',totalWeeks:20},courses:[
+    {name:'周四课',teacher:'教师甲',room:'教学楼101',weekday:4,startSection:1,endSection:2,startWeek:1,endWeek:20,weekType:'all',colorIndex:0},
+    {name:'周一课',teacher:'教师乙',room:'教学楼102',weekday:1,startSection:1,endSection:2,startWeek:1,endWeek:20,weekType:'all',colorIndex:1}
+  ],adjustments:[]})));
+  await page.reload();await page.locator('#weekSelect').selectOption('5');await page.locator('#toggleAll').click();
+  assert.match(await page.locator('.week-column>.week-heading').nth(3).innerText(),/公休日/);
+  assert.equal(await page.locator('.week-column').nth(3).locator('.week-course').count(),0);
+  assert.equal(await page.locator('.week-column').nth(0).locator('.week-course').filter({hasText:'周一课'}).count(),1);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:path.join(__dirname,'../test-results/public-rest-day.png'),animations:'disabled'});
+  await page.locator('#closeOverview').click();await page.getByRole('button',{name:'星期四，公休日'}).click();
+  assert.match(await page.locator('#dayDateHint').innerText(),/公休日/);
+  assert.match(await page.locator('#courseList').innerText(),/公休日，今天不上课/);
+  count++;console.log('PASS 国庆公休日停课并标记，学校延长假期不自动停课');
   assert.deepEqual(errors,[]);console.log('Browser tests passed: '+count);
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -2,11 +2,11 @@
 
 独立 Android 课表工具，内置教务 WebView，读取后核对并保存本机。与 SYUCT-web 网站分开维护。
 
-当前版本 **0.2.22-alpha1**：支持每门课自选不连续的教学周，以及按具体日期将一天的课调到另一日。详见 [UPDATE-0.2.22.md](UPDATE-0.2.22.md)。
+当前版本 **0.2.23-alpha1**：已公布的 2026 年全国统一公休日自动停课，并与手动「调课迁出」区分显示。详见 [UPDATE-0.2.23.md](UPDATE-0.2.23.md)。
 
 ## 使用
 
-1. 从本仓库 Releases 下载已发布的 APK，在安卓手机安装。本次本地构建包名为 `SYUCT-Timetable-0.2.22-alpha1.apk`。设置中可点击「检测更新」。
+1. 从本仓库 Releases 下载已发布的 APK，在安卓手机安装。本次本地构建包名为 `SYUCT-Timetable-0.2.23-alpha1.apk`。设置中可点击「检测更新」。
 2. 选择「导入 → 本科教务」或「硕士教务」，在学校页面自行登录。
 3. 本科可读取首页七天课表（教师信息留空），完整信息请进入「信息查询 → 学生个人课表」；硕士进入「我的课程表」，选择目标学期。
 4. 点击底部「读取课表」，核对课程、单双周和教室，确认后保存。
@@ -16,6 +16,8 @@
 
 点击课程的「修改」，将周次方式设为「自选周次」，即可点选第 1、2、4、5、7 周等不连续周次。切到具体周，点击全览的星期栏或单日页的「调整当天课表」，可以选原上课日期与目标日期。目标日原有课程只在该日被替换；默认原日期停课，也可选原日期照常上课。设置页可修改或取消调课。桌面小组件与课前提醒按调整后的实际日期显示。
 
+2026 年全国统一放假日期在 App 内自动显示为「公休日」，不显示常规课程，也不安排当日课前提醒；原日期的手动调课仍可把课程搬到其他日期。手动指定公休日为调课目标日时，以该手动调课为准。9 月 28–30 日等学校自行延长的假期并非国家公布的公休日，需按校历手动调整；普通周末也不会一律停课。2027 年安排待正式公布后再更新，不猜测未来假期。
+
 普通 TT2 课表码能传递自选周次的实际安排，但会将不连续周拆成多条课程；它不包含一次性调课。需要完整保留自选周次、调课记录时，请在设置中复制「含调课记录的完整备份」，换机时粘贴到 App 导入页。
 
 小组件显示当前课并自动更新。每次上课前15分钟发通知，设置页可关闭。默认普通提醒可能延迟；可主动开启“准时提醒”并授权精确定时，仍使用默认提示音、尊重静音与勿扰，无常驻服务。强行停止、关机和撤销授权等情况仍可能影响送达。详见 [REMINDERS.md](REMINDERS.md)。
@@ -24,7 +26,7 @@
 
 本机已安装独立 Android Emulator（API 35 / ARM64，预览设备 `SYUCT_Preview_API35`），无需 Android Studio。工具位于用户目录 `.local/share/syuct-android-tools`；模拟设备数据位于 `.android/avd`，均不上传仓库。
 
-双击项目中的 **`预览化大课表.command`**：自动启动已配置模拟器、覆盖安装 `artifacts/SYUCT-Timetable-0.2.22-alpha1.apk` 并打开 App。也可在终端运行 `zsh ./预览化大课表.command`。该入口适用于这台已配置的 Mac；其他电脑需先安装 SDK 并创建同名设备。
+双击项目中的 **`预览化大课表.command`**：自动启动已配置模拟器、覆盖安装 `artifacts/SYUCT-Timetable-0.2.23-alpha1.apk` 并打开 App。也可在终端运行 `zsh ./预览化大课表.command`。该入口适用于这台已配置的 Mac；其他电脑需先安装 SDK 并创建同名设备。
 
 用鼠标点击、拖动模拟手机；关闭模拟器窗口即可停止运行，不会开机自启。预览设备中的 `DEMO` 是合成测试课表，不包含在 APK 中，导入自己的课表可替换。
 
@@ -99,7 +101,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。CI 产物为开发调�
 ./gradlew --no-daemon assembleRelease lintRelease
 node tools/sign-release.mjs \
   app/build/outputs/apk/release/app-release-unsigned.apk \
-  artifacts/SYUCT-Timetable-0.2.0-alpha1.apk \
+  artifacts/SYUCT-Timetable-0.2.23-alpha1.apk \
   /path/outside/repository/signing
 ```
 

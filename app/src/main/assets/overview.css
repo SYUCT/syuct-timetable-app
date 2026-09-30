@@ -68,6 +68,9 @@ nav{z-index:5}
 .day-adjustment{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-8px 0 6px;color:#58738b;font-size:12px}
 .day-adjustment .text-button{padding:7px 2px;white-space:nowrap}
 .days button{font-size:12px;white-space:nowrap}
+.days button span,.days button small{display:block;line-height:1.2}
+.days button small{font-size:9px;margin-top:2px;color:inherit}
+.week-column>.week-heading small{display:block;font-size:9px;font-weight:700;color:inherit;white-space:nowrap}
 .week-picker{margin:14px 0 4px;padding:14px;border:1px solid #dce9f5;border-radius:16px;background:#f6faff}
 .week-picker strong{display:block;font-size:13px;color:#24557f;margin-bottom:12px}
 .week-picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}

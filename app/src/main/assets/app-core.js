@@ -9,6 +9,9 @@
   const blank=()=>({settings:{semester:'',firstWeekDate:'',totalWeeks:20},courses:[],adjustments:[]});
   const weekdays=['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
   const DAY_MS=86400000;
+  // 国办发明电〔2025〕7号；仅包含已公布的 2026 年全国统一放假日期。
+  const publicRestRanges=[['2026-01-01','2026-01-03'],['2026-02-15','2026-02-23'],['2026-04-04','2026-04-06'],['2026-05-01','2026-05-05'],['2026-06-19','2026-06-21'],['2026-09-25','2026-09-27'],['2026-10-01','2026-10-07']];
+  function isPublicRestDay(date){return publicRestRanges.some(([first,last])=>first<=date&&date<=last);}
   function dateDay(value){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw Error('请选择有效的调课日期。');
     const [year,month,day]=value.split('-').map(Number),ms=Date.UTC(year,month-1,day);
@@ -243,13 +246,14 @@
     const targetWeekday=new Date(day).getUTCDay()||7;
     const adjustments=state.adjustments||[];
     const target=adjustments.find(a=>a.targetDate===date);
-    const stopped=!target&&adjustments.find(a=>a.sourceDate===date&&a.suspendSource);
+    const holiday=!target&&isPublicRestDay(date);
+    const stopped=!target&&!holiday&&adjustments.find(a=>a.sourceDate===date&&a.suspendSource);
     const sourceDate=target?target.sourceDate:date;
     const sourceWeek=weekForDate(state.settings,sourceDate);
     const sourceWeekday=new Date(dateDay(sourceDate)).getUTCDay()||7;
-    const courses=stopped||sourceWeek===null||sourceWeek<1||sourceWeek>state.settings.totalWeeks?[]:
+    const courses=holiday||stopped||sourceWeek===null||sourceWeek<1||sourceWeek>state.settings.totalWeeks?[]:
       state.courses.flatMap((course,index)=>course.weekday===sourceWeekday&&inWeek(course,sourceWeek)?[{...course,weekday:targetWeekday,sourceIndex:index,sourceDate,adjusted:!!target}]:[]);
-    return {date,sourceDate,targetWeek,status:target?'adjusted':stopped?'suspended':'normal',courses};
+    return {date,sourceDate,targetWeek,status:target?'adjusted':holiday?'holiday':stopped?'suspended':'normal',courses};
   }
   function minute(t){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))throw Error('上课时间应为有效的时:分。');const [h,m]=t.split(':').map(Number);return h*60+m;}
   function validateTimes(times){
@@ -286,5 +290,5 @@
       output.push({weekday:d,lanes:Math.max(1,ends.length),items:placed});
     }return output;
   }
-  return {blank,validate,graduate,undergraduateHome,parseCapture,numbers,ranges,currentWeek,inWeek,weekForDate,dateForWeekday,effectiveDay,weekdays,defaultTimes,schoolClock,validateTimes,active,activeAt,layoutWeek};
+  return {blank,validate,graduate,undergraduateHome,parseCapture,numbers,ranges,currentWeek,inWeek,weekForDate,dateForWeekday,effectiveDay,isPublicRestDay,weekdays,defaultTimes,schoolClock,validateTimes,active,activeAt,layoutWeek};
 });

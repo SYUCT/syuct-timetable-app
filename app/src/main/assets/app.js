@@ -29,6 +29,7 @@ window.openOverview=(fromWidget=false)=>{widgetEntry=fromWidget===true;allDays=t
 window.refreshClock=()=>{if(activePage==='home')renderHome();};
 function el(tag,text,className){const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n;}
 function weekLabel(c){return c.weekType==='custom'?'第 '+c.weeks.join('、')+' 周':c.startWeek+'–'+c.endWeek+' 周'+({all:'',odd:' · 单周',even:' · 双周'}[c.weekType]||'');}
+function dayStatus(status){return {adjusted:'调课',suspended:'调课迁出',holiday:'公休日'}[status]||'';}
 function weekDays(){
   return Array.from({length:7},(_,i)=>{
     const date=C.dateForWeekday(state.settings,selectedWeek,i+1);
@@ -77,12 +78,12 @@ function renderHome(){
   $('overviewRange').textContent=allWeeks?'全部安排 · 单日调课请切回具体周':(selectedWeek===current?'本周':'第 '+selectedWeek+' 周')+(selectedWeek===current?' · 第 '+selectedWeek+' 周':'')+' · 点击星期栏可调课';
   $('prevWeek').disabled=selectedWeek<=1; $('nextWeek').disabled=selectedWeek>=state.settings.totalWeeks;
   const days=weekDays();
-  $('days').replaceChildren(...C.weekdays.map((d,i)=>{const info=days[i],label=d.slice(-1)+(info.status==='adjusted'?'·调':info.status==='suspended'?'·休':'');const b=el('button',label,!allDays&&i+1===selectedDay?'selected':''); b.setAttribute('aria-label',d+(info.status==='adjusted'?'，调课':info.status==='suspended'?'，停课':'')); b.setAttribute('aria-pressed',String(!allDays&&i+1===selectedDay)); b.onclick=()=>{selectedDay=i+1;allDays=false;renderHome();};return b;}));
+  $('days').replaceChildren(...C.weekdays.map((d,i)=>{const info=days[i],status=dayStatus(info.status),b=el('button',undefined,!allDays&&i+1===selectedDay?'selected':''); b.append(el('span',d.slice(-1)));if(status)b.append(el('small',status));b.setAttribute('aria-label',d+(status?'，'+status:'')); b.setAttribute('aria-pressed',String(!allDays&&i+1===selectedDay)); b.onclick=()=>{selectedDay=i+1;allDays=false;renderHome();};return b;}));
   $('toggleAll').textContent=allDays?'单日':'全览'; $('courseList').replaceChildren();
   $('days').hidden=allDays;$('courseList').hidden=allDays;$('weekOverview').hidden=!allDays;$('gridHint').hidden=!allDays;
   $('dayAdjustment').hidden=allDays;
   const selected=days[selectedDay-1];
-  $('dayDateHint').textContent=selected.date?(selected.date+(selected.status==='adjusted'?' · 调课':selected.status==='suspended'?' · 停课':'')):'先设置第一周日期';
+  $('dayDateHint').textContent=selected.date?(selected.date+(dayStatus(selected.status)?' · '+dayStatus(selected.status):'')):'先设置第一周日期';
   $('openAdjustment').disabled=!selected.date;
   const courses=days.flatMap(day=>day.courses).sort((a,b)=>a.weekday-b.weekday||a.startSection-b.startSection);
   const visible=selected.courses.slice().sort((a,b)=>a.startSection-b.startSection);
@@ -98,7 +99,7 @@ function renderHome(){
     $('courseList').append(card);
   }
   $('empty').hidden=state.courses.length>0;
-  if(state.courses.length&&!visible.length) $('courseList').append(el('p',selected.status==='suspended'?'本日停课，课程已调出。':'这一天没有课程。','empty muted'));
+  if(state.courses.length&&!visible.length) $('courseList').append(el('p',selected.status==='holiday'?'公休日，今天不上课。':selected.status==='suspended'?'本日课程已调到其他日期。':'这一天没有课程。','empty muted'));
   if(allDays)renderOverview(courses,current,days);
 }
 function renderOverview(courses,current,days){
@@ -119,8 +120,9 @@ function renderOverview(courses,current,days){
     time.append(row);
   }grid.append(time);
   for(const day of layout){
-    const info=days[day.weekday-1],col=el('div',undefined,'week-column');const heading=el('button',C.weekdays[day.weekday-1].replace('星期','周')+(info.status==='adjusted'?' · 调':info.status==='suspended'?' · 休':''),'week-heading');
-    heading.disabled=!info.date||allWeeks;heading.setAttribute('aria-label',C.weekdays[day.weekday-1]+'，调整当天课表');heading.onclick=()=>openAdjustmentFor(info.date);
+    const info=days[day.weekday-1],col=el('div',undefined,'week-column'),heading=el('button',undefined,'week-heading');
+    heading.append(el('span',C.weekdays[day.weekday-1].replace('星期','周')));if(dayStatus(info.status))heading.append(el('small',dayStatus(info.status)));
+    heading.disabled=!info.date||allWeeks;heading.setAttribute('aria-label',C.weekdays[day.weekday-1]+(dayStatus(info.status)?'，'+dayStatus(info.status):'')+'，调整当天课表');heading.onclick=()=>openAdjustmentFor(info.date);
     if((allWeeks||selectedWeek===current)&&day.weekday===C.schoolClock().weekday)heading.classList.add('is-today');col.append(heading);
     const body=el('div',undefined,'week-day-body');body.style.height=sections*rowHeight+'px';
     for(const {course:c,lane} of day.items){
