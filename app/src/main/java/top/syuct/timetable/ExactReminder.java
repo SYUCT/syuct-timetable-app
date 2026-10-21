@@ -16,7 +16,7 @@ final class ExactReminder {
     static boolean active(Context c){return requested(c)&&permitted(c);}
     static void enable(Context c,boolean value){
         CourseReminder.prefs(c).edit().putBoolean("preciseReminder",value).apply();
-        CourseReminder.schedule(c,System.currentTimeMillis(),true);
+        CourseReminder.schedule(c,System.currentTimeMillis());
     }
     static String status(Context c){
         if(!requested(c))return "普通提醒 · 可能受系统省电影响而延迟";

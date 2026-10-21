@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
         if(ready&&pendingOverview){pendingOverview=false;web.evaluateJavascript("window.openOverview("+getIntent().getBooleanExtra("fromWidget",false)+")",null);}
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);pendingOverview=TodayWidget.OPEN.equals(intent.getAction());deliver();}
-    private void refreshWidget(){runOnUiThread(()->{try{TodayWidget.refreshAll(this);CourseReminder.schedule(this);}catch(RuntimeException ignored){Toast.makeText(this,"课表已保存，请重新打开应用更新提醒与小组件",Toast.LENGTH_SHORT).show();}});}
+    private void refreshWidget(){runOnUiThread(()->CourseReminder.refresh(this));}
     private void offerReminders(){
         if(CourseReminder.prefs(this).contains("offered"))return;
         CourseReminder.prefs(this).edit().putBoolean("offered",true).apply();

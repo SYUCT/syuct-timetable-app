@@ -47,11 +47,23 @@ public final class CourseReminder extends BroadcastReceiver {
             return ReminderPlanner.events(first,s.getInt("totalWeeks"),times,courses,ScheduleDayData.read(state,firstDate,s.getInt("totalWeeks")));
         }catch(Exception e){return Collections.emptyList();}
     }
+    static void refresh(Context context){
+        Context c=context.getApplicationContext();
+        // Widgets are optional. A missing/unsupported widget service must never
+        // prevent restoring an ordinary course reminder, including on resume.
+        try{schedule(c);}
+        catch(RuntimeException|LinkageError e){
+            prefs(c).edit().putString("scheduleError","提醒预约未完成，请检查系统通知与后台限制。").apply();
+            android.util.Log.w("CourseReminder","Reminder restoration failed",e);
+        }
+        try{TodayWidget.refreshAll(c);}
+        catch(RuntimeException|LinkageError e){android.util.Log.w("CourseReminder","Widget refresh failed; reminder restoration was independent",e);}
+    }
     static synchronized void schedule(Context c){
-        schedule(c,System.currentTimeMillis(),false);
+        schedule(c,System.currentTimeMillis());
     }
     // Clock argument is also used by the isolated native regression harness.
-    static synchronized void schedule(Context c,long now,boolean force){
+    static synchronized void schedule(Context c,long now){
         AlarmManager manager=c.getSystemService(AlarmManager.class);
         PendingIntent previous=PendingIntent.getBroadcast(c,150,new Intent(c,CourseReminder.class).setAction(FIRE),PendingIntent.FLAG_NO_CREATE|PendingIntent.FLAG_IMMUTABLE);
         SharedPreferences p=prefs(c);
@@ -62,20 +74,26 @@ public final class CourseReminder extends BroadcastReceiver {
         List<ReminderPlanner.Event> all=events(c);
         LiveCourseNotice.reconcile(c,all,now);
         Set<String> sent=sent(c,now);
-        p.edit().remove("deliveryError").apply();
         // Opening/saving/rebooting during the reminder window must not drop an unsent class.
         firePending(c,all,now,sent);
         long next=ReminderPlanner.next(all,now,sent);
         boolean exact=ExactReminder.active(c);
-        if(!force&&next>0&&previous!=null&&p.getLong("scheduledAt",0)==next&&p.getBoolean("scheduledExact",false)==exact)return;
-        if(previous!=null)manager.cancel(previous);
-        p.edit().remove("scheduledAt").remove("scheduledExact").remove("scheduleError").apply();
-        if(next==0)return;
+        // A PendingIntent can survive after its alarm was removed. Preferences
+        // and token existence are not proof of an active system reservation.
+        // Setting the same PendingIntent replaces the alarm in-place, avoiding
+        // a cancel/recreate gap and restoring lost reservations on every resume.
+        if(next==0){
+            if(previous!=null)manager.cancel(previous);
+            p.edit().remove("scheduledAt").remove("scheduledExact").remove("scheduleError").apply();return;
+        }
         try{
             boolean reservedExact=ExactReminder.reserve(manager,next,alarm(c,next),exact);
-            p.edit().putLong("scheduledAt",next).putBoolean("scheduledExact",reservedExact).apply();
+            p.edit().putLong("scheduledAt",next).putBoolean("scheduledExact",reservedExact).putLong("lastReservedAt",now).remove("scheduleError").apply();
             if(exact&&!reservedExact)p.edit().putString("scheduleError","精确定时权限发生变化，已改用普通提醒；请重新检查授权。").apply();
-        }catch(RuntimeException e){p.edit().putString("scheduleError","预约失败，请重新打开 App 或检查系统后台限制。").apply();}
+        }catch(RuntimeException e){
+            p.edit().remove("scheduledAt").remove("scheduledExact").putString("scheduleError","预约失败，请重新打开 App 或检查系统后台限制。").apply();
+            android.util.Log.w("CourseReminder","Alarm reservation failed",e);
+        }
     }
     private static Set<String> sent(Context c,long now){
         Set<String> result=new HashSet<>(prefs(c).getStringSet("sent",Collections.emptySet()));
@@ -94,34 +112,42 @@ public final class CourseReminder extends BroadcastReceiver {
         for(ReminderPlanner.Event e:all)if(e.remind==next){plan+="\n"+e.course.name;break;}
         if(!ReminderPlanner.pending(all,now,sent(c,now)).isEmpty())plan="当前有待发送的课前提醒。\n"+plan;
         String error=prefs(c).getString("scheduleError",prefs(c).getString("deliveryError",""));
-        return "已开启。"+plan+"\n"+ExactReminder.status(c)+"。上课后不补发。"+(error.isEmpty()?"":"\n"+error);
+        return "已开启。"+plan+"\n"+ExactReminder.status(c)+"。上课后不补发。"+(error.isEmpty()?"":"\n"+error)
+            +"\n最近后台触发："+recordedTime(prefs(c).getLong("lastAlarmAt",0))
+            +"\n最近通知提交："+recordedTime(prefs(c).getLong("lastPostedAt",0))
+            +"\n记录用于排查，不代表通知已展示或响铃。";
     }
+    private static String recordedTime(long at){return at<=0?"暂无记录":Instant.ofEpochMilli(at).atZone(LessonClock.ZONE).format(java.time.format.DateTimeFormatter.ofPattern("M月d日 HH:mm:ss"));}
     @Override public void onReceive(Context context,Intent intent){
         Context c=context.getApplicationContext();String action=intent.getAction();
         if(FIRE.equals(action)||Intent.ACTION_BOOT_COMPLETED.equals(action)||Intent.ACTION_TIME_CHANGED.equals(action)||Intent.ACTION_TIMEZONE_CHANGED.equals(action)||Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)||AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED.equals(action)){
-            schedule(c,System.currentTimeMillis(),true);
-            TodayWidget.refreshAll(c);
+            if(FIRE.equals(action))prefs(c).edit().putLong("lastAlarmAt",System.currentTimeMillis()).apply();
+            refresh(c);
         }
     }
     @android.annotation.SuppressLint("MissingPermission") // notifications() checks runtime permission and channel.
     private static void firePending(Context c,List<ReminderPlanner.Event> all,long now,Set<String> sent){
         SharedPreferences p=prefs(c);
         for(ReminderPlanner.Event e:ReminderPlanner.pending(all,now,sent)){
-            PendingIntent pi=CourseNoticeDetails.open(c,e.key,e.course.name,e.start,e.course.teacher,e.course.room,false);
-            Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
-            Notification.Builder builder=new Notification.Builder(c,CHANNEL)
-                .setContentTitle(e.course.name).setContentText(CourseNoticeStyle.summary(e.start,e.course.teacher,e.course.room))
-                .setStyle(CourseNoticeStyle.rows(e.start,e.course.teacher,e.course.room).setBigContentTitle(e.course.name))
-                .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
-                .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
-                .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
-                .setTimeoutAfter(e.start-now);
-            Notification notice=LiveCourseNotice.build(c,builder,e.key,151,e.start,now,e.course.name,e.course.teacher,e.course.room);
             try{
-                LiveCourseNotice.post(c,e.key,151,notice);sent.add(e.key);
+                PendingIntent pi=CourseNoticeDetails.open(c,e.key,e.course.name,e.start,e.course.teacher,e.course.room,false);
+                Notification publicNotice=CourseNoticeStyle.apply(c,new Notification.Builder(c,CHANNEL)).setContentTitle("上课提醒").setContentText("即将上课，点击查看课表").build();
+                Notification.Builder builder=new Notification.Builder(c,CHANNEL)
+                    .setContentTitle(e.course.name).setContentText(CourseNoticeStyle.summary(e.start,e.course.teacher,e.course.room))
+                    .setStyle(CourseNoticeStyle.rows(e.start,e.course.teacher,e.course.room).setBigContentTitle(e.course.name))
+                    .addAction(new Notification.Action.Builder(null,"查看详情",pi).build())
+                    .setContentIntent(pi).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
+                    .setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(publicNotice).setOnlyAlertOnce(true)
+                    .setTimeoutAfter(e.start-now);
+                Notification ordinary=CourseNoticeStyle.apply(c,builder).build();
+                Notification notice=LiveCourseNotice.build(c,builder,e.key,151,e.start,now,e.course.name,e.course.teacher,e.course.room);
+                LiveCourseNotice.post(c,e.key,151,notice,ordinary);sent.add(e.key);
                 // Persist each event before the next one; stable tags also prevent duplicate entries.
-                p.edit().putStringSet("sent",new HashSet<>(sent)).commit();
-            }catch(RuntimeException e1){p.edit().putString("deliveryError","通知未能发送，请检查系统通知权限后重新打开 App。").apply();}
+                p.edit().putStringSet("sent",new HashSet<>(sent)).putLong("lastPostedAt",now).remove("deliveryError").commit();
+            }catch(RuntimeException|LinkageError error){
+                p.edit().putString("deliveryError","通知未能提交，请检查系统通知权限后重新打开 App。").apply();
+                android.util.Log.w("CourseReminder","Course notification submission failed",error);
+            }
         }
         p.edit().remove("sentDay").putStringSet("sent",new HashSet<>(sent)).commit();
     }

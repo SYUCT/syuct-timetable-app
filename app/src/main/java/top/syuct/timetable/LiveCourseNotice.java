@@ -15,7 +15,7 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static boolean available(Context c){
         if(Build.VERSION.SDK_INT<36||!enabled(c))return false;
         try{return c.getSystemService(NotificationManager.class).canPostPromotedNotifications();}
-        catch(RuntimeException e){return false;}
+        catch(RuntimeException|LinkageError e){return false;}
     }
     static void enable(Context c,boolean value){
         CourseReminder.prefs(c).edit().putBoolean("liveCountdown",value).apply();
@@ -31,21 +31,26 @@ public final class LiveCourseNotice extends BroadcastReceiver {
         // Unsupported/disallowed systems must retain a dismissible, non-ongoing notice.
         if(Build.VERSION.SDK_INT<36||!available(c))return builder.build();
         Notification original=builder.build();
-        PendingIntent end=PendingIntent.getBroadcast(c,id,new Intent(c,LiveCourseNotice.class)
-            .setAction(END).addFlags(Intent.FLAG_RECEIVER_FOREGROUND).setData(Uri.parse("syuct-live://end/"+Uri.encode(key)))
-            .putExtra("key",key).putExtra("id",id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
-        // The header timer remains system-owned; the chip uses four course characters.
-        // Never restart at 15 minutes if delivery was late; target actual class start.
-        liveState(builder,endAction,end,start,now,true);
-        // Only a promoted notice gets the four-character chip. Its expanded
-        // card has its own first line so the classroom is visible on Xiaomi.
-        builder.setStyle(new Notification.BigTextStyle().setBigContentTitle(name)
-            .bigText(CourseNoticeStyle.liveDetails(start,teacher,room)));
-        CourseNoticeStyle.chip(builder,name);
-        Notification notice=builder.build();
-        if(!notice.hasPromotableCharacteristics())return original;
-        return notice;
+        try{
+            PendingIntent end=PendingIntent.getBroadcast(c,id,new Intent(c,LiveCourseNotice.class)
+                .setAction(END).addFlags(Intent.FLAG_RECEIVER_FOREGROUND).setData(Uri.parse("syuct-live://end/"+Uri.encode(key)))
+                .putExtra("key",key).putExtra("id",id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            Notification.Action endAction=new Notification.Action.Builder(null,"结束提醒",end).build();
+            // The header timer remains system-owned; the chip uses four course characters.
+            // Never restart at 15 minutes if delivery was late; target actual class start.
+            liveState(builder,endAction,end,start,now,true);
+            // Only a promoted notice gets the four-character chip. Its expanded
+            // card has its own first line so the classroom is visible on Xiaomi.
+            builder.setStyle(new Notification.BigTextStyle().setBigContentTitle(name)
+                .bigText(CourseNoticeStyle.liveDetails(start,teacher,room)));
+            CourseNoticeStyle.chip(builder,name);
+            Notification notice=builder.build();
+            if(!notice.hasPromotableCharacteristics())return original;
+            return notice;
+        }catch(RuntimeException|LinkageError error){
+            android.util.Log.w("LiveCourseNotice","Live notification unavailable; using ordinary reminder",error);
+            return original;
+        }
     }
     static Notification.Builder liveState(Notification.Builder builder,Notification.Action action,PendingIntent end,long start,long now,boolean promoted){
         if(Build.VERSION.SDK_INT<36)return builder;
@@ -60,19 +65,32 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             .setTimeoutAfter(Math.max(1,start-now)).setDeleteIntent(end).addAction(action);
     }
     static void cancelLive(Context c){
-        NotificationManager manager=c.getSystemService(NotificationManager.class);
-        for(StatusBarNotification n:manager.getActiveNotifications())
+        for(StatusBarNotification n:activeNotices(c))
             if(PREVIEW.equals(n.getTag())||n.getId()==151&&((n.getNotification().flags&Notification.FLAG_ONGOING_EVENT)!=0||NoticeCompat.legacy(n.getNotification())))
-                NoticeCompat.cancel(c,n.getTag(),n.getId());
+                cancelNotice(c,n.getTag(),n.getId());
     }
     static void reconcile(Context c,List<ReminderPlanner.Event> events,long now){
-        NotificationManager manager=c.getSystemService(NotificationManager.class);
-        for(StatusBarNotification n:manager.getActiveNotifications()){
+        for(StatusBarNotification n:activeNotices(c)){
             if(n.getId()!=151)continue;
             boolean current=false;
             for(ReminderPlanner.Event e:events)if(e.key.equals(n.getTag())&&e.start>now){current=true;break;}
-            if(!current)NoticeCompat.cancel(c,n.getTag(),n.getId());
+            if(!current)cancelNotice(c,n.getTag(),n.getId());
         }
+    }
+    private static StatusBarNotification[] activeNotices(Context c){
+        try{
+            StatusBarNotification[] notices=c.getSystemService(NotificationManager.class).getActiveNotifications();
+            return notices==null?new StatusBarNotification[0]:notices;
+        }catch(RuntimeException|LinkageError error){
+            // Compatibility environments may not expose notification inspection.
+            // This optional cleanup must not block scheduling or ordinary notices.
+            android.util.Log.w("LiveCourseNotice","Notification inspection unavailable; skipping optional cleanup",error);
+            return new StatusBarNotification[0];
+        }
+    }
+    private static void cancelNotice(Context c,String key,int id){
+        try{NoticeCompat.cancel(c,key,id);}
+        catch(RuntimeException|LinkageError error){android.util.Log.w("LiveCourseNotice","Optional notification cleanup failed",error);}
     }
     static String preview(Context c){
         return submitPreview(c).message;
@@ -90,9 +108,10 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             NoticePreview sample=NoticePreview.sample(c);
             Notification.Builder builder=sample.builder(c,start,true).setOnlyAlertOnce(false);
             android.os.Bundle token=new android.os.Bundle();token.putLong("syuct.preview.target",start);builder.addExtras(token);
-            post(c,PREVIEW,153,build(c,builder,PREVIEW,153,start,now,sample.name,sample.teacher,sample.room));
+            Notification ordinary=CourseNoticeStyle.apply(c,builder).build();
+            post(c,PREVIEW,153,build(c,builder,PREVIEW,153,start,now,sample.name,sample.teacher,sample.room),ordinary);
             return new PreviewResult(start,"已发送预览请求，正在确认系统是否接收…");
-        }catch(RuntimeException e){return new PreviewResult(0,"预览发送失败，请检查通知权限与声音设置。");}
+        }catch(RuntimeException|LinkageError e){return new PreviewResult(0,"预览发送失败，请检查通知权限与声音设置。");}
     }
     // Bounded check on a worker thread, not a polling service. An active record
     // proves acceptance only, never that an OEM island actually appeared.
@@ -117,6 +136,14 @@ public final class LiveCourseNotice extends BroadcastReceiver {
     static void post(Context c,String key,int id,Notification notice){
         c.getSystemService(NotificationManager.class).notify(key,id,notice);
     }
+    static void post(Context c,String key,int id,Notification notice,Notification ordinary){
+        try{post(c,key,id,notice);}
+        catch(RuntimeException|LinkageError error){
+            if((notice.flags&Notification.FLAG_ONGOING_EVENT)==0)throw error;
+            android.util.Log.w("LiveCourseNotice","Live submission rejected; retrying ordinary reminder",error);
+            post(c,key,id,ordinary);
+        }
+    }
     @Override public void onReceive(Context c,Intent intent){
         if(!END.equals(intent.getAction())&&!NoticeCompat.OLD_REFRESH.equals(intent.getAction()))return;
         String key=intent.getStringExtra("key");int id=intent.getIntExtra("id",0);
@@ -127,6 +154,6 @@ public final class LiveCourseNotice extends BroadcastReceiver {
             return;
         }
         // CourseReminder's durable sent journal already prevents re-posting after dismissal.
-        NoticeCompat.cancel(c,key,id);
+        cancelNotice(c,key,id);
     }
 }
